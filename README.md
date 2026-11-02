@@ -15,7 +15,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **KYC review**: view each uploaded file, then verify it or reject it with a note.
 - **Investments**: record each investment and upload share certificates.
 - **Share price**: publish the actual price (the live price members see) and projected prices.
-- **Founder chats**: answer "Ask the Founder" questions, or start a conversation.
+- **Founder Q&A**: the admin is the founder. Every member who has signed up is listed by name, with search and *All / Needs reply / Unread* filters. Choose a name and that advisor's chat opens, with their full history and quick replies. You can start a conversation with anyone. Replies are signed with the founder name set in **Settings**.
 - **Welcome animation**: on login, members arrive and walk through the VINC door, and anyone awaiting approval is left "Waiting" at the door, with a shortcut to review them.
 - **Settings**: company name, founder name, currency, the length of the temporary window, and the admin password.
 
@@ -81,3 +81,4 @@ test/          node:test API tests
 | ![Waiting for approval](docs/screenshots/13-pending-gate.png) | ![Admin documents](docs/screenshots/08-admin-documents.png) |
 | ![Joining VINC](docs/screenshots/34-welcome-queue.png) | ![You're in](docs/screenshots/35-welcome-done.png) |
 | ![The door opens on approval](docs/screenshots/36-door-opens.png) | ![Admin welcome](docs/screenshots/37-admin-welcome.png) |
+| ![Founder Q&A](docs/screenshots/38-admin-qa.png) | |

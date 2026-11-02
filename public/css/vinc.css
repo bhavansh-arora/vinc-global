@@ -479,7 +479,7 @@ dialog.dlg .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padd
 .chat-status { font: 500 .7rem var(--mono); color: var(--muted); text-align: center; padding: 0 0 6px; background: var(--card); }
 
 /* Admin chat (two panes) */
-.inbox { display: grid; grid-template-columns: 300px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--card); height: min(70dvh, 680px); }
+.inbox { display: grid; grid-template-columns: 320px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--card); height: min(70dvh, 680px); }
 .inbox-list { border-right: 1px solid var(--line); overflow-y: auto; }
 .inbox-list button { display: flex; gap: 10px; width: 100%; text-align: left; padding: 12px 14px; border: none; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); background: none; cursor: pointer; align-items: center; transition: background-color var(--dur-2) ease; }
 .inbox-list button:hover { background: var(--paper-2); }
@@ -488,9 +488,25 @@ dialog.dlg .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padd
 .inbox-list .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-list .meta span { display: block; font-size: .82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-list .n { background: var(--rust); color: #fff; font: 700 .72rem/20px var(--mono); min-width: 20px; height: 20px; border-radius: 999px; text-align: center; padding: 0 6px; }
-.inbox-thread { display: flex; flex-direction: column; min-width: 0; }
+.inbox-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.inbox-side .inbox-list { border-right: none; flex: 1; min-height: 0; }
+.inbox-tools { display: grid; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); background: var(--card-2); }
+.inbox-tools .input { min-height: 40px; }
+.inbox-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.inbox-filters button { border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: .2em .75em; font-weight: 700; font-size: .8rem; cursor: pointer; color: var(--ink-2); transition: all var(--dur-2) ease; }
+.inbox-filters button span { font-family: var(--mono); opacity: .75; }
+.inbox-filters button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.inbox-list .meta i { font-style: normal; opacity: .8; }
+.inbox-list .side-meta { display: grid; justify-items: end; gap: 4px; flex: none; }
+.reply-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--amber); --ping: var(--amber); animation: vg-ping 2s var(--ease-out) infinite; }
+.chat-note { display: flex; gap: 8px; align-items: center; padding: 8px 14px; font-size: .85rem; background: var(--amber-soft); color: var(--amber-ink); border-bottom: 1px solid var(--line); }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 10px 0; background: var(--card); border-top: 1px solid var(--line); }
+.quick button { flex: none; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1.5px solid var(--line); background: var(--card-2); border-radius: 999px; padding: .3em .85em; font-size: .82rem; cursor: pointer; transition: border-color var(--dur-2) ease, translate var(--dur-2) var(--ease-out); }
+.quick button:hover { border-color: var(--teal); translate: 0 -2px; }
+.quick + .chat-form { border-top: none; }
+.inbox-thread { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .inbox-thread .chat-log { background-color: var(--paper); }
-@media (max-width: 760px) { .inbox { grid-template-columns: 1fr; height: auto; } .inbox-list { max-height: 240px; border-right: none; border-bottom: 1px solid var(--line); } .inbox-thread { height: 60dvh; } }
+@media (max-width: 760px) { .inbox { grid-template-columns: minmax(0, 1fr); height: auto; } .inbox-side { border-right: none; border-bottom: 1px solid var(--line); } .inbox-side .inbox-list { max-height: 280px; } .inbox-thread { height: 70dvh; } }
 
 /* Drawer (admin member detail) */
 dialog.drawer { border: none; padding: 0; margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: min(680px, 100vw); background: var(--paper); color: var(--ink); box-shadow: -20px 0 60px -20px rgba(0,0,0,.4); }

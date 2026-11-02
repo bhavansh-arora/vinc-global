@@ -36,15 +36,25 @@ member.post('/', (req, res) => {
 });
 
 // ----- founder (admin) side -----
+// Every member the founder can talk to: anyone who has signed up (or already has messages),
+// with the latest message, unread count and whether the last word was theirs (needs a reply).
 admin.get('/', (_req, res) => {
-  res.json(db.prepare(`
-    SELECT u.id, u.uid, u.name, u.role,
+  const rows = db.prepare(`
+    SELECT u.*,
            (SELECT body FROM messages m WHERE m.advisor_id = u.id ORDER BY id DESC LIMIT 1) AS last_body,
            (SELECT sender FROM messages m WHERE m.advisor_id = u.id ORDER BY id DESC LIMIT 1) AS last_sender,
            (SELECT MAX(created_at) FROM messages m WHERE m.advisor_id = u.id) AS last_at,
+           (SELECT COUNT(*) FROM messages m WHERE m.advisor_id = u.id) AS total,
            (SELECT COUNT(*) FROM messages m WHERE m.advisor_id = u.id AND m.sender = 'advisor' AND m.read_at IS NULL) AS unread
-    FROM users u WHERE u.role != 'admin' AND EXISTS (SELECT 1 FROM messages m WHERE m.advisor_id = u.id)
-    ORDER BY last_at DESC`).all());
+    FROM users u
+    WHERE u.role != 'admin' AND (u.status != 'invited' OR EXISTS (SELECT 1 FROM messages m WHERE m.advisor_id = u.id))
+    ORDER BY (last_at IS NULL), last_at DESC, u.name COLLATE NOCASE`).all();
+  res.json(rows.map((u) => ({
+    id: u.id, uid: u.uid, name: u.name, role: u.role, organisation: u.organisation, email: u.email,
+    state: A.accessState(u), access_type: u.access_type, access_expires_at: u.access_expires_at,
+    last_body: u.last_body, last_sender: u.last_sender, last_at: u.last_at, total: u.total, unread: u.unread,
+    needs_reply: u.last_sender === 'advisor',
+  })));
 });
 admin.get('/unread', (_req, res) => {
   res.json({ unread: db.prepare("SELECT COUNT(*) AS n FROM messages WHERE sender = 'advisor' AND read_at IS NULL").get().n });

@@ -23,7 +23,7 @@
     kyc: ['KYC review', 'Verify member documents'],
     investments: ['Investments', 'Record investments and issue share certificates'],
     prices: ['Share price', 'Publish the live and projected price'],
-    chats: ['Founder chats', 'Answer “Ask the Founder” questions'],
+    chats: ['Questions & answers', 'Answer “Ask the Founder” questions as the founder'],
     settings: ['Settings', 'Portal settings and your password'],
   };
   const LOG_LABELS = { login: 'Logged in', signup: 'Signed up', approved_temporary: 'Temporary access approved', approved_permanent: 'Permanent access approved', renewal_requested: 'Asked for access again', kyc_uploaded: 'Uploaded KYC', kyc_verified: 'KYC verified', kyc_rejected: 'KYC rejected', kyc_submitted: 'KYC reopened', viewed_document: 'Viewed', downloaded_certificate: 'Downloaded certificate', investment_recorded: 'Investment recorded', certificate_issued: 'Certificate issued', password_changed: 'Password changed', id_generated: 'ID generated', rejected: 'Sign-up rejected', revoked: 'Access revoked', reset: 'ID reset' };
@@ -45,6 +45,12 @@
     $('#side-scrim').onclick = () => $('#app').classList.remove('nav-open');
     settings = await VG.api('/api/admin/settings').catch(() => ({}));
     if (settings.currency) VG.currency = settings.currency;
+    const paintMe = () => {
+      const n = settings.founder_name && settings.founder_name !== 'the Founder' ? settings.founder_name : 'Founder';
+      $('#me-name').textContent = n; $('#me-avatar').textContent = VG.initials(n);
+    };
+    paintMe();
+    document.addEventListener('vg:settings', paintMe);
     await Promise.all([loadUsers(), loadStats()]);
     window.addEventListener('hashchange', show);
     show();
@@ -697,43 +703,104 @@
     }
   }
 
-  // ================================================================ chats
+  // ================================================================ chats (the admin is the founder)
+  const STATE_NOTE = {
+    pending: 'is waiting for approval and will see your messages once you let them in.',
+    expired: 'has a closed preview window and will see your messages once access is open again.',
+    revoked: 'has no access right now, so they will not see new messages until you restore it.',
+    rejected: 'was not approved, so they will not see new messages unless you reset and approve them.',
+    invited: 'has not signed up yet and will see your messages after they do.',
+  };
   async function renderChats() {
     const el = viewEl('chats');
-    const wanted = Number((location.hash.split('/')[1]) || 0);
+    const founder = settings.founder_name && settings.founder_name !== 'the Founder' ? settings.founder_name : 'the Founder';
     let convos;
     try { convos = await VG.api('/api/admin/chats'); } catch (e) { return fail(e); }
-    el.innerHTML = `<div class="section-title"><div><h2>Ask the Founder</h2><p>Questions from members. Replies appear in their chat within a few seconds.</p></div>
-        <div class="btn-row"><select class="input" id="chat-start" style="min-height:38px;width:auto"><option value="">Message a member…</option>${memberOptions()}</select></div></div>
-      <div class="inbox"><div class="inbox-list" id="inbox-list"></div>
-        <div class="inbox-thread" id="inbox-thread"><div class="chat-log"><div class="chat-empty"><div class="bubbles"><i></i><i></i><i></i></div><p>Choose a conversation.</p></div></div></div></div>`;
-    const paintList = (sel) => {
+    let filter = 'all', query = '';
+    let selected = Number((location.hash.split('/')[1]) || 0);
+    el.innerHTML = `<div class="section-title"><div><h2>Questions &amp; answers</h2>
+        <p>You answer as <b>${VG.esc(founder)}</b>. Pick a member's name and their chat opens. Replies reach them within a few seconds.</p></div>
+        <a class="btn btn-soft btn-sm" href="#settings">${VG.icon.gear} Change founder name</a></div>
+      <div class="inbox">
+        <div class="inbox-side">
+          <div class="inbox-tools">
+            <input class="input" id="chat-search" type="search" placeholder="Search a name, ID or company" autocomplete="off">
+            <div class="inbox-filters" role="group" aria-label="Show">
+              <button type="button" data-f="all" aria-pressed="true">All <span data-count="all"></span></button>
+              <button type="button" data-f="reply" aria-pressed="false">Needs reply <span data-count="reply"></span></button>
+              <button type="button" data-f="unread" aria-pressed="false">Unread <span data-count="unread"></span></button>
+            </div>
+          </div>
+          <div class="inbox-list" id="inbox-list"></div>
+        </div>
+        <div class="inbox-thread" id="inbox-thread"></div>
+      </div>`;
+
+    const emptyThread = () => {
+      $('#inbox-thread').innerHTML = `<div class="chat-log"><div class="chat-empty"><div class="bubbles"><i></i><i></i><i></i></div>
+        <b style="font-family:var(--display);font-size:1.25rem">Choose a member</b>
+        <p class="small">Click a name on the left to open your conversation with them. Anyone waiting for an answer is marked <span class="chip warn" style="font-size:.7rem">Needs reply</span>.</p></div></div>`;
+    };
+    const matches = (c) => {
+      if (query && ![c.name, c.uid, c.organisation, c.email].some((x) => (x || '').toLowerCase().includes(query))) return false;
+      if (filter === 'reply') return c.needs_reply;
+      if (filter === 'unread') return c.unread > 0;
+      return true;
+    };
+    const paintList = () => {
       const box = $('#inbox-list');
-      box.innerHTML = convos.map((c) => `<button type="button" data-c="${c.id}" aria-pressed="${c.id === sel}"><span class="avatar" style="width:38px;height:38px;font-size:.9rem">${VG.initials(c.name)}</span>
-          <span class="meta"><b>${VG.esc(c.name || c.uid)}</b><span>${c.last_sender === 'founder' ? 'You: ' : ''}${VG.esc(c.last_body || '')}</span></span>
-          ${c.unread ? `<span class="n">${c.unread}</span>` : `<span class="muted small">${VG.ago(c.last_at)}</span>`}</button>`).join('') || `<div class="empty" style="padding:24px">${VG.icon.chat}<p>No questions yet.</p></div>`;
+      if (!box) return;
+      el.querySelector('[data-count=all]').textContent = convos.length;
+      el.querySelector('[data-count=reply]').textContent = convos.filter((c) => c.needs_reply).length || '';
+      el.querySelector('[data-count=unread]').textContent = convos.filter((c) => c.unread).length || '';
+      const list = convos.filter(matches);
+      box.innerHTML = list.map((c) => `<button type="button" data-c="${c.id}" aria-pressed="${c.id === selected}">
+          <span class="avatar" style="width:40px;height:40px;font-size:.9rem${c.role === 'investor' ? ';background:var(--teal);color:#fff' : ''}">${VG.initials(c.name)}</span>
+          <span class="meta"><b>${VG.esc(c.name || c.uid)}</b>
+            <span>${c.last_body ? `${c.last_sender === 'founder' ? 'You: ' : ''}${VG.esc(c.last_body)}` : `<i>${roleLabel(c.role)} · no messages yet</i>`}</span></span>
+          <span class="side-meta">${c.last_at ? `<span class="muted small">${VG.ago(c.last_at)}</span>` : ''}
+            ${c.unread ? `<span class="n">${c.unread}</span>` : c.needs_reply ? '<span class="reply-dot" title="Needs reply"></span>' : ''}</span>
+        </button>`).join('') || `<div class="empty" style="padding:24px">${VG.icon.users}<p>${convos.length ? 'No one matches.' : 'Members appear here once they sign up with their VINC ID.'}</p></div>`;
       $$('[data-c]', box).forEach((b) => b.addEventListener('click', () => openThread(Number(b.dataset.c))));
     };
+
     const openThread = async (id) => {
       clearInterval(timers.chat);
+      selected = id;
       history.replaceState(null, '', `#chats/${id}`);
       const c = convos.find((x) => x.id === id) || users.find((u) => u.id === id);
+      if (!c) return emptyThread();
       const conv = convos.find((x) => x.id === id);
       if (conv) conv.unread = 0;
-      paintList(id);
+      paintList();
+      const first = (c.name || '').split(' ')[0] || 'there';
+      const note = STATE_NOTE[c.state];
       const th = $('#inbox-thread');
-      th.innerHTML = `<header class="chat-head"><span class="avatar">${VG.initials(c && c.name)}</span><div class="who"><b>${VG.esc((c && c.name) || 'Member')}</b><span>${VG.esc((c && c.uid) || '')}</span></div>
+      th.innerHTML = `<header class="chat-head"><span class="avatar">${VG.initials(c.name)}</span>
+          <div class="who"><b>${VG.esc(c.name || 'Member')}</b><span>${roleLabel(c.role)} · ${VG.esc(c.uid)}${c.organisation ? ' · ' + VG.esc(c.organisation) : ''}</span></div>
           <button class="x" type="button" data-open-member="${id}" title="Member details" aria-label="Member details">${VG.icon.user.replace('<svg', '<svg width="18" height="18"')}</button></header>
-        <div class="chat-log" aria-live="polite"></div>
-        <form class="chat-form"><textarea rows="1" placeholder="Write a reply…" maxlength="4000" aria-label="Reply"></textarea><button type="submit" aria-label="Send">${VG.icon.send}</button></form>`;
+        ${note ? `<div class="chat-note">${VG.icon.clock.replace('<svg', '<svg width="16" height="16"')} <span>${VG.esc(first)} ${VG.esc(note)}</span></div>` : ''}
+        <div class="chat-log" aria-live="polite"><div class="viewer-loading" style="min-height:160px"><div class="spinner"></div></div></div>
+        <div class="quick" hidden></div>
+        <form class="chat-form"><textarea rows="1" placeholder="Reply to ${VG.esc(first)}…" maxlength="4000" aria-label="Reply"></textarea><button type="submit" aria-label="Send">${VG.icon.send}</button></form>`;
       $('[data-open-member]', th).addEventListener('click', () => openMember(id));
-      const log = $('.chat-log', th), ta = $('textarea', th), form = $('form', th);
+      const log = $('.chat-log', th), ta = $('textarea', th), form = $('form', th), quick = $('.quick', th);
       let lastId = 0;
+      const showQuick = (empty) => {
+        const picks = empty
+          ? [`Hi ${first}, welcome to VINC Global! I'm ${founder === 'the Founder' ? 'the founder' : founder}. Ask me anything about VINC.`, `Hi ${first}, thank you for backing VINC. Happy to walk you through the plan whenever suits you.`]
+          : [`Thanks for the question, ${first}. Let me get back to you shortly.`, 'Great question. I have added the details to the data room.', 'Would a short call help? Share a time that works for you.'];
+        quick.hidden = false;
+        quick.innerHTML = picks.map((q) => `<button type="button">${VG.esc(q)}</button>`).join('');
+        $$('button', quick).forEach((b) => b.addEventListener('click', () => { ta.value = b.textContent; ta.focus(); ta.dispatchEvent(new Event('input')); }));
+      };
       try {
         const msgs = await VG.api(`/api/admin/chats/${id}`);
-        if (!msgs.length) log.innerHTML = '<div class="chat-empty"><p>No messages yet. Say hello.</p></div>';
-        lastId = VG.chatThread(log, msgs, 'founder', { theirName: (c && c.name) || '' });
+        if (selected !== id) return;
+        log.innerHTML = msgs.length ? '' : `<div class="chat-empty"><div class="bubbles"><i></i><i></i><i></i></div><p>No messages with ${VG.esc(first)} yet. Start the conversation.</p></div>`;
+        lastId = VG.chatThread(log, msgs, 'founder', { theirName: c.name || '' });
         log.scrollTop = log.scrollHeight;
+        showQuick(!msgs.length);
         loadStats();
       } catch (e) { fail(e); }
       ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(140, ta.scrollHeight) + 'px'; });
@@ -747,31 +814,38 @@
           const m = await VG.api(`/api/admin/chats/${id}`, { body: { body } });
           lastId = VG.chatThread(log, [m], 'founder');
           log.scrollTop = log.scrollHeight;
-          const conv2 = convos.find((x) => x.id === id);
-          if (conv2) { conv2.last_body = body; conv2.last_sender = 'founder'; conv2.last_at = Date.now(); }
-          else convos.unshift({ id, uid: c.uid, name: c.name, last_body: body, last_sender: 'founder', last_at: Date.now(), unread: 0 });
-          paintList(id);
+          showQuick(false);
+          const cv = convos.find((x) => x.id === id);
+          if (cv) Object.assign(cv, { last_body: body, last_sender: 'founder', last_at: Date.now(), needs_reply: false, unread: 0 });
+          convos.sort((a, b) => (b.last_at || 0) - (a.last_at || 0));
+          paintList();
         } catch (ex) { fail(ex); ta.value = body; }
       });
-      ta.focus();
+      if (matchMedia('(max-width: 760px)').matches) window.scrollTo({ top: th.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+      else ta.focus();
       timers.chat = setInterval(async () => {
         try {
           const msgs = await VG.api(`/api/admin/chats/${id}?after=${lastId}`);
-          if (msgs.length) { lastId = VG.chatThread(log, msgs, 'founder', { theirName: (c && c.name) || '' }); log.scrollTop = log.scrollHeight; }
+          if (msgs.length) { lastId = VG.chatThread(log, msgs, 'founder', { theirName: c.name || '' }); log.scrollTop = log.scrollHeight; }
         } catch { /* keep polling */ }
       }, 4000);
     };
-    $('#chat-start').addEventListener('change', (e) => { if (e.target.value) openThread(Number(e.target.value)); e.target.value = ''; });
-    paintList(wanted);
-    if (wanted) openThread(wanted);
-    // Refresh the conversation list every 15 s so new questions show up.
+
+    $('#chat-search').addEventListener('input', (e) => { query = e.target.value.trim().toLowerCase(); paintList(); });
+    $$('[data-f]', el).forEach((b) => b.addEventListener('click', () => {
+      filter = b.dataset.f;
+      $$('[data-f]', el).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      paintList();
+    }));
+    paintList();
+    if (selected) openThread(selected); else emptyThread();
+    // Refresh the list every 15 s so new questions show up.
     timers.chatList = setInterval(async () => {
       try {
         const fresh = await VG.api('/api/admin/chats');
-        const sel = Number((location.hash.split('/')[1]) || 0);
-        fresh.forEach((f) => { if (f.id === sel) f.unread = 0; });
+        fresh.forEach((f) => { if (f.id === selected) f.unread = 0; });
         convos = fresh;
-        paintList(sel);
+        paintList();
       } catch { /* ignore */ }
     }, 15000);
   }
@@ -800,7 +874,7 @@
     VG.bindPasswords(el);
     $('#set-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      try { settings = await VG.api('/api/admin/settings', { method: 'PUT', body: Object.fromEntries(new FormData(e.currentTarget)) }); VG.currency = settings.currency || '₹'; VG.toast('Settings saved.', 'ok'); } catch (ex) { fail(ex); }
+      try { settings = await VG.api('/api/admin/settings', { method: 'PUT', body: Object.fromEntries(new FormData(e.currentTarget)) }); VG.currency = settings.currency || '₹'; document.dispatchEvent(new CustomEvent('vg:settings')); VG.toast('Settings saved.', 'ok'); } catch (ex) { fail(ex); }
     });
     $('#admin-pwd').addEventListener('submit', async (e) => {
       e.preventDefault();
