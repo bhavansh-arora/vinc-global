@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<script src="/js/theme-init.js"></script>
+<link rel="stylesheet" href="/css/vinc.css">
+<title>Admin · VINC Global</title>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <aside class="side" id="side" aria-label="Admin navigation">
+    <a class="brand" href="/" data-brand></a>
+    <nav>
+      <a href="#overview" data-view="overview"><span data-ic="home"></span>Overview</a>
+      <a href="#approvals" data-view="approvals"><span data-ic="clock"></span>Approvals<span class="badge" data-badge="pending"></span></a>
+      <a href="#members" data-view="members"><span data-ic="users"></span>Members &amp; IDs</a>
+      <a href="#documents" data-view="documents"><span data-ic="vault"></span>Documents</a>
+      <a href="#news" data-view="news"><span data-ic="news"></span>News</a>
+      <a href="#kyc" data-view="kyc"><span data-ic="id"></span>KYC review<span class="badge" data-badge="kyc_pending"></span></a>
+      <a href="#investments" data-view="investments"><span data-ic="seal"></span>Investments</a>
+      <a href="#prices" data-view="prices"><span data-ic="chart"></span>Share price</a>
+      <a href="#chats" data-view="chats"><span data-ic="chat"></span>Founder chats<span class="badge" data-badge="unread"></span></a>
+      <a href="#settings" data-view="settings"><span data-ic="gear"></span>Settings</a>
+    </nav>
+    <div class="side-foot">
+      <div class="me"><span class="avatar teal">A</span><div class="who"><b>Administrator</b><span>admin · all rights</span></div></div>
+      <button class="btn btn-soft btn-sm" type="button" data-logout><span data-ic="logout"></span>Log out</button>
+    </div>
+  </aside>
+  <div class="side-scrim" id="side-scrim"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-toggle" type="button" id="menu-toggle" aria-label="Open menu"><span data-ic="menu"></span></button>
+      <div class="ttl"><h1 id="view-title">Overview</h1><p id="view-sub"></p></div>
+      <div class="tools">
+        <a class="btn btn-soft btn-sm hide-sm" href="/" target="_blank" rel="noopener">View site</a>
+        <button class="icon-btn sound-btn" type="button" data-sound-toggle></button>
+        <button class="icon-btn theme-btn" type="button" data-theme-toggle></button>
+      </div>
+    </header>
+    <main class="content">
+      <section class="view" data-view="overview" hidden></section>
+      <section class="view" data-view="approvals" hidden></section>
+      <section class="view" data-view="members" hidden></section>
+      <section class="view" data-view="documents" hidden></section>
+      <section class="view" data-view="news" hidden></section>
+      <section class="view" data-view="kyc" hidden></section>
+      <section class="view" data-view="investments" hidden></section>
+      <section class="view" data-view="prices" hidden></section>
+      <section class="view" data-view="chats" hidden></section>
+      <section class="view" data-view="settings" hidden></section>
+    </main>
+  </div>
+</div>
+<dialog class="drawer" id="drawer" aria-label="Member details"><div class="drawer-inner" id="drawer-inner"></div></dialog>
+
+<script src="/js/common.js"></script>
+<script src="/js/ambient.js"></script>
+<script src="/js/viewer.js"></script>
+<script src="/vendor/chartjs/chart.umd.min.js"></script>
+<script src="/js/chat.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

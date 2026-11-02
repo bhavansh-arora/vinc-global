@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<script src="/js/theme-init.js"></script>
+<link rel="stylesheet" href="/css/vinc.css">
+<link rel="stylesheet" href="/css/site.css">
+<title>Log in · VINC Global</title>
+</head>
+<body>
+<main class="auth">
+  <aside class="auth-art">
+    <canvas id="art-canvas" aria-hidden="true"></canvas>
+    <a class="brand" href="/" data-brand></a>
+    <div>
+      <p class="label">Advisor &amp; Investor Portal</p>
+      <h2>Welcome back to the lab.</h2>
+      <p>Everything you back at VINC, in one quiet room: the papers, your stake, the latest from the centre and a direct line to the founder.</p>
+      <ul class="auth-points">
+        <li style="--i:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>View-only data room, watermarked with your ID</li>
+        <li style="--i:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Your chat with the founder picks up where you left off</li>
+        <li style="--i:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Share price, projections and certificates</li>
+      </ul>
+    </div>
+    <p class="auth-quote">"A skills studio where students build." We are building it with you.</p>
+  </aside>
+
+  <section class="auth-form">
+    <div class="top-tools">
+      <a class="brand auth-brand-sm" href="/" data-brand></a>
+      <div class="tools">
+        <button class="icon-btn sound-btn" type="button" data-sound-toggle></button>
+        <button class="icon-btn theme-btn" type="button" data-theme-toggle></button>
+      </div>
+    </div>
+    <div class="auth-card">
+      <p class="label">Log in</p>
+      <h1>Good to see you</h1>
+      <p class="sub">Use the VINC ID and password you signed up with.</p>
+      <div class="seg" id="who" role="group" aria-label="I am">
+        <button type="button" aria-pressed="true" data-value="member">Advisor / Investor</button>
+        <button type="button" aria-pressed="false" data-value="admin">Admin</button>
+      </div>
+      <form id="login-form" novalidate>
+        <label class="field"><span id="uid-label">VINC ID</span>
+          <input class="input mono" name="uid" id="uid" autocomplete="username" placeholder="VG-ADV-XXXXXX" required autocapitalize="characters" spellcheck="false">
+        </label>
+        <label class="field"><span>Password</span>
+          <div class="pwd-wrap"><input class="input" type="password" name="password" autocomplete="current-password" required><button type="button"></button></div>
+        </label>
+        <p class="form-error" id="err" role="alert"></p>
+        <button class="btn btn-primary" type="submit" style="width:100%">Log in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+      </form>
+      <p class="alt" id="alt">Got a new VINC ID from the team? <a href="/signup">Activate it here</a></p>
+      <p class="alt"><a href="/">← Back to VINC Global</a></p>
+    </div>
+  </section>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/ambient.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

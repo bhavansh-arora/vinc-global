@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="t">
+  <title id="t">VINC Lab</title>
+  <rect width="128" height="128" rx="28" fill="#2B1A10"/>
+  <g transform="translate(14 8)">
+    <g fill="#E09A35">
+      <polygon points="4,24 40,24 84,116 56,116"/>
+      <polygon points="62,116 80,116 104,71 96,58 "/>
+      <polygon points="62,116 80,116 140,4 122,4" clip-path="url(#c)"/>
+    </g>
+    <path fill="#3FB3A4" d="M57.5 58 q9 -5 18 0 t17.5 0 L73.5 92 Z"/>
+    <g fill="#4FC1B1"><circle cx="69" cy="47" r="4"/><circle cx="80" cy="36" r="3"/><circle cx="72" cy="27" r="2.2"/></g>
+  </g>
+  <defs><clipPath id="c"><rect x="0" y="16" width="112" height="110"/></clipPath></defs>
+</svg>

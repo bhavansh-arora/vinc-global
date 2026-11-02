@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VINC Global · Advisor &amp; Investor Portal</title>
+<meta name="description" content="VINC Global is the private portal for the advisors and investors behind VINC: the VINC Learning Centre for skill education in Bengaluru and the VINC Lab Kaushal Bodh LMS for CBSE schools.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F7F0E3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1B130D" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<script src="/js/theme-init.js"></script>
+<link rel="stylesheet" href="/css/vinc.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a class="skip" href="#top">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap header-row">
+    <a class="brand" href="/" data-brand></a>
+    <nav class="nav" id="nav" aria-label="Main">
+      <a href="#platforms">What we build</a>
+      <a href="#why">Why now</a>
+      <a href="#portal">The portal</a>
+      <a href="#onboarding">Onboarding</a>
+      <a href="#news" id="nav-news" hidden>News</a>
+      <div class="nav-auth">
+        <a class="btn btn-ghost btn-sm" href="/signup">Activate ID</a>
+        <a class="btn btn-primary btn-sm" href="/login">Log in</a>
+      </div>
+    </nav>
+    <div class="header-tools">
+      <button class="icon-btn sound-btn" type="button" data-sound-toggle></button>
+      <button class="icon-btn theme-btn" type="button" data-theme-toggle></button>
+      <button class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="nav"><i aria-hidden="true"></i>Menu</button>
+    </div>
+  </div>
+  <div class="progress" aria-hidden="true"><i id="progress-bar"></i></div>
+</header>
+
+<main id="top">
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <canvas id="bg-canvas" aria-hidden="true"></canvas>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="label">VINC Global · Advisor &amp; Investor Portal</p>
+        <h1 id="hero-title"><span class="w">Back</span> <span class="w" style="--wi:1">the</span> <span class="w" style="--wi:2">studio</span> <span class="w" style="--wi:3">where</span> <span class="w" style="--wi:4">students</span> <em class="w" style="--wi:5">build<svg class="scribble" viewBox="0 0 200 24" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M3 16 C 42 5, 78 21, 118 10 S 176 6, 197 14"/></svg></em></h1>
+        <p class="lead">VINC Global is the private home for the people who back VINC. Follow the work at our Bengaluru learning centre and our Kaushal Bodh LMS, read the company papers, track your stake and ask the founder anything, all in one place.</p>
+        <p class="live-chip"><span class="dot" aria-hidden="true"></span><span><b>VINC Learning Centre opens mid-November 2026</b> · Bengaluru</span></p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="/login">Log in to the portal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
+          <a class="btn btn-ghost" href="/signup">I have a VINC ID</a>
+        </div>
+        <dl class="hero-stats">
+          <div><dt><span class="count" data-to="100">100</span></dt><dd>weekend seats a quarter at the centre</dd></div>
+          <div><dt><span class="count" data-to="18">18</span></dt><dd>Kaushal Bodh projects live on the LMS</dd></div>
+          <div><dt><span class="count" data-to="110">110</span> hrs</dt><dd>of skill work a year for every CBSE middle-schooler</dd></div>
+        </dl>
+      </div>
+
+      <div class="orbit-wrap" aria-label="VINC Global connects you to both VINC platforms">
+        <div class="orbit" id="orbit">
+          <div class="ring" aria-hidden="true"></div>
+          <div class="ring r2" aria-hidden="true"></div>
+          <div class="core" aria-hidden="true">
+            <svg class="core-mark" viewBox="0 0 128 128">
+              <defs>
+                <clipPath id="cm-c"><rect x="0" y="16" width="112" height="110"/></clipPath>
+                <clipPath id="cm-flask"><path d="M56 52 L95 52 L73.5 92 Z"/></clipPath>
+              </defs>
+              <g transform="translate(14 8)">
+                <g fill="var(--amber)"><polygon points="4,24 40,24 84,116 56,116"/><polygon points="62,116 80,116 104,71 96,58"/><polygon points="62,116 80,116 140,4 122,4" clip-path="url(#cm-c)"/></g>
+                <g clip-path="url(#cm-flask)"><path class="liquid" d="M-30 60 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V100 H-30 Z"/></g>
+                <g class="bub"><circle cx="69" cy="47" r="4"/><circle cx="80" cy="36" r="3"/><circle cx="72" cy="27" r="2.2"/><circle cx="76" cy="52" r="2.6"/></g>
+              </g>
+            </svg>
+          </div>
+          <a class="planet p-lab" href="https://vinc-lab.com" target="_blank" rel="noopener" data-orbit="0" data-radius="0.44"><span class="pi">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7 15h10"/></svg></span>Learning Centre</a>
+          <a class="planet p-lms" href="https://lms.vinc-lab.com" target="_blank" rel="noopener" data-orbit="2.1" data-radius="0.44"><span class="pi">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7M8 11h5"/></svg></span>Kaushal Bodh LMS</a>
+          <a class="planet p-you" href="/login" data-orbit="4.2" data-radius="0.44"><span class="pi">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.2-6.5 8-6.5s7 2.5 8 6.5"/></svg></span>You, the backer</a>
+        </div>
+        <p class="orbit-caption">One centre, one platform, and the people who make them possible.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span>Robotics and automation</span><span>Computational thinking</span><span>Basic electronics</span><span>3D design</span><span>Internet of Things</span><span>Machine learning</span><span>Kaushal Bodh Grades 6–8</span><span>Teacher rubrics</span><span>Digital portfolios</span><span>Capstone projects</span>
+      <span>Robotics and automation</span><span>Computational thinking</span><span>Basic electronics</span><span>3D design</span><span>Internet of Things</span><span>Machine learning</span><span>Kaushal Bodh Grades 6–8</span><span>Teacher rubrics</span><span>Digital portfolios</span><span>Capstone projects</span>
+    </div>
+  </div>
+
+  <!-- The two platforms -->
+  <section id="platforms" aria-labelledby="pl-title">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="label">What you are backing</p><h2 id="pl-title">Two VINC platforms, one idea: learn by building</h2></div>
+        <p>VINC brings the hands-on side of skill education under one roof, in a Bengaluru studio for students and in an LMS that schools run under their own name.</p>
+      </div>
+      <div class="platforms">
+        <article class="platform lab reveal">
+          <div class="top">
+            <span class="badge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V3"/><path d="M7 15h10"/></svg></span>
+            <div><h3>VINC Learning Centre</h3><span class="url">vinc-lab.com · Bengaluru</span></div>
+          </div>
+          <p><b>A skills studio where students build.</b> Hands-on robotics, electronics, coding and AI for Grades 6–12 on weekends, and job-oriented career courses for undergraduates on weekdays. One centre, one roof, real projects.</p>
+          <div class="facts">
+            <div><b>₹18,000</b><span>Building · Grades 6–8, per programme</span></div>
+            <div><b>₹24,000</b><span>Applied AI · Grades 9–12, per programme</span></div>
+            <div><b>4 × 25</b><span>weekend batches, a mentor at every bench</span></div>
+            <div><b>Nov 2026</b><span>opening, with free demo classes first</span></div>
+          </div>
+          <div class="tags"><span class="chip">Project portfolio</span><span class="chip">Skills report card</span><span class="chip">Verified skill certificate</span></div>
+          <a class="btn btn-amber btn-sm go" href="https://vinc-lab.com" target="_blank" rel="noopener">Visit vinc-lab.com <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+        </article>
+        <article class="platform lms reveal" style="--rd:120ms">
+          <div class="top">
+            <span class="badge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7M8 11h5"/></svg></span>
+            <div><h3>VINC Lab · Kaushal Bodh LMS</h3><span class="url">lms.vinc-lab.com · CBSE Grades 6–8</span></div>
+          </div>
+          <p><b>Kaushal Bodh, brought to life.</b> VINC Lab turns NCERT's Kaushal Bodh activity books into a ready-to-run skill programme: guided projects, quizzes, teacher rubrics and digital portfolios, with a dashboard for every student, parent, teacher and school.</p>
+          <div class="facts">
+            <div><b>18</b><span>projects across Grades 6, 7 and 8, all live</span></div>
+            <div><b>144</b><span>guided activities with textbook pages</span></div>
+            <div><b>4</b><span>dashboards: students, parents, teachers, schools</span></div>
+            <div><b>Your brand</b><span>schools run it under their own name and colours</span></div>
+          </div>
+          <div class="tags"><span class="chip">Auto-marked quizzes</span><span class="chip">One-tap rubrics</span><span class="chip">Kaushal Mela countdown</span></div>
+          <a class="btn btn-teal btn-sm go" href="https://lms.vinc-lab.com" target="_blank" rel="noopener">Visit lms.vinc-lab.com <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why now -->
+  <section id="why" class="band-alt" aria-labelledby="why-title">
+    <div class="wrap two-col">
+      <div class="reveal">
+        <p class="label">Why now</p>
+        <h2 id="why-title">Skill education is now part of every CBSE school year</h2>
+        <p class="lead">CBSE has made skill education mandatory in Grades 6–8 with NCERT's Kaushal Bodh books, and a skill subject in Class 9 from 2026–27. Most schools have the books. Few have the labs, kits, trained teachers or a way to run, track and grade it all.</p>
+        <p class="big-quote">VINC brings the hands-on side under one roof.</p>
+      </div>
+      <ol class="timeline reveal" id="timeline" style="--rd:120ms">
+        <li><span class="when">Oct 2025</span><b>Skill-81/2025</b> Kaushal Bodh skill education is made mandatory in Grades 6–8.</li>
+        <li><span class="when">Mar 2026</span><b>Skill-13/2026</b> Guidelines for Composite Skill Labs in every school.</li>
+        <li class="now"><span class="when">2026–27 · this session</span><b>Live</b> Kaushal Bodh is in the timetable, and Grades 6, 7 and 8 are live on VINC Lab.</li>
+        <li><span class="when">Nov 2026</span><b>Opening</b> The VINC Learning Centre opens its doors in Bengaluru.</li>
+        <li><span class="when">Aug 2027</span><b>Deadline</b> Composite Skill Labs due in all existing CBSE schools.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Inside the portal -->
+  <section id="portal" aria-labelledby="portal-title">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="label">Inside VINC Global</p><h2 id="portal-title">Everything an advisor needs, in one quiet room</h2></div>
+        <p>Built for the people who back VINC with their time, their networks and their money.</p>
+      </div>
+      <div class="features">
+        <article class="feature f-amber reveal"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg></div><h3>Ask the Founder</h3><p>A direct line to the founder. Your conversation is saved, and picks up where you left off every time you log in.</p></article>
+        <article class="feature f-teal reveal" style="--rd:80ms"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5V7M12 17v-1.5M15.5 12H17M7 12h1.5"/></svg></div><h3>Confidential data room</h3><p>Board resolutions, registration documents, financials and reports, in view-only mode with your ID watermarked on every page.</p></article>
+        <article class="feature f-olive reveal" style="--rd:160ms"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></div><h3>Your stake, live</h3><p>Track what you have invested, see the latest share price and where it is projected to go, and download your share certificates.</p></article>
+        <article class="feature f-plum reveal"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14 10h4M14 13.5h3"/></svg></div><h3>KYC in minutes</h3><p>Upload PAN, Aadhaar, address and bank proof from your phone. See each document move from submitted to verified.</p></article>
+        <article class="feature f-rust reveal" style="--rd:80ms"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3>Access on your terms</h3><p>Start with a 72-hour preview to look around, or get permanent access once you are on board. A live timeline shows your window.</p></article>
+        <article class="feature f-teal reveal" style="--rd:160ms"><div class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5M8 17h3"/></svg></div><h3>News from the lab</h3><p>Milestones, school partnerships and demo-day updates appear the moment the team publishes them.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Onboarding steps -->
+  <section id="onboarding" class="band-alt" aria-labelledby="ob-title">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="label">Onboarding</p><h2 id="ob-title">From invitation to data room in four steps</h2></div>
+        <p>Every account is created by the VINC team. Nobody gets in without an ID from us and an approval.</p>
+      </div>
+      <ol class="steps reveal" id="steps">
+        <li style="--f:var(--olive)"><span class="n">1</span><h3>Get your VINC ID</h3><p>The VINC team generates a personal ID for you, like <span class="mono">VG-ADV-7K3P9Q</span>.</p></li>
+        <li style="--f:var(--amber)"><span class="n">2</span><h3>Sign up</h3><p>Enter your ID, your details and a password of your choice.</p></li>
+        <li style="--f:var(--rust)"><span class="n">3</span><h3>Approval</h3><p>The team approves a 72-hour preview or permanent access.</p></li>
+        <li style="--f:var(--plum)"><span class="n">4</span><h3>Step inside</h3><p>Data room, KYC, your portfolio and a direct line to the founder.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- News -->
+  <section id="news" aria-labelledby="news-title" hidden>
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div><p class="label">From the lab</p><h2 id="news-title">Latest news</h2></div>
+      </div>
+      <div class="news-list" id="news-list"></div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="band-dark cta" aria-labelledby="cta-title">
+    <span class="cta-orb a" aria-hidden="true"></span><span class="cta-orb b" aria-hidden="true"></span>
+    <div class="wrap reveal">
+      <p class="label">Advisors and investors</p>
+      <h2 id="cta-title">Already have a VINC ID? Step inside.</h2>
+      <p class="lead">Not yet? Write to <a href="mailto:info@vinc-lab.com" style="color:var(--band-accent)">info@vinc-lab.com</a> and the team will set you up.</p>
+      <div class="btn-row">
+        <a class="btn btn-amber" href="/login">Log in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
+        <a class="btn btn-ghost" href="/signup">Activate my ID</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot-row">
+      <div><a class="brand" href="/" data-brand></a><p style="margin-top:10px">The advisor and investor portal of VINC. Bengaluru.</p></div>
+      <div class="foot-links">
+        <a href="https://vinc-lab.com" target="_blank" rel="noopener">vinc-lab.com</a>
+        <a href="https://lms.vinc-lab.com" target="_blank" rel="noopener">lms.vinc-lab.com</a>
+        <a href="mailto:info@vinc-lab.com">info@vinc-lab.com</a>
+        <a href="/login">Log in</a>
+      </div>
+    </div>
+    <p class="fine">Kaushal Bodh and Kaushal Vikas are NCERT textbooks. VINC is an independent provider and is not affiliated with or endorsed by NCERT or CBSE. Information inside this portal is confidential and shared only with approved advisors and investors. Share prices shown in the portal are set by the company and are not market quotes.</p>
+  </div>
+</footer>
+
+<script src="/js/common.js"></script>
+<script src="/js/ambient.js"></script>
+<script src="/js/landing.js"></script>
+</body>
+</html>
