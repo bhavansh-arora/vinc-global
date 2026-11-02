@@ -48,6 +48,22 @@
     await Promise.all([loadUsers(), loadStats()]);
     window.addEventListener('hashchange', show);
     show();
+    if (VG.takeIntroFlag()) {
+      // People arrive and step through the door; anyone still awaiting approval waits in line.
+      const waiting = Math.min(stats.pending, 3);
+      const members = stats.members;
+      await VG.welcomeIntro({
+        label: 'VINC Global · Admin',
+        title: 'Opening the founder’s desk…',
+        sub: 'Your advisors and investors are arriving.',
+        doneTitle: 'Welcome back, founder.',
+        doneSub: members ? `${members} ${members === 1 ? 'member' : 'members'} in the VINC circle${stats.pending ? ` · ${stats.pending} waiting at the door` : ''}.` : 'Your VINC circle starts here. Generate the first ID to invite someone.',
+        others: Math.max(4, Math.min(7, members + waiting)),
+        waitAtDoor: waiting,
+        extra: stats.pending ? `<a class="btn btn-amber btn-sm" href="#approvals">${VG.icon.clock} Review ${stats.pending} approval${stats.pending === 1 ? '' : 's'}</a>` : '',
+      });
+    }
+    VG.riseIn($('.view:not([hidden])'));
     setInterval(async () => {
       const before = stats ? stats.pending + stats.unread + stats.kyc_pending : 0;
       await loadStats();

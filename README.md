@@ -16,6 +16,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **Investments**: record each investment and upload share certificates.
 - **Share price**: publish the actual price (the live price members see) and projected prices.
 - **Founder chats**: answer "Ask the Founder" questions, or start a conversation.
+- **Welcome animation**: on login, members arrive and walk through the VINC door, and anyone awaiting approval is left "Waiting" at the door, with a shortcut to review them.
 - **Settings**: company name, founder name, currency, the length of the temporary window, and the admin password.
 
 **Advisor / investor (`/signup`, then `/advisor`)**:
@@ -25,6 +26,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **Data room**: board resolutions, registration documents, financials and more. Everything is view-only and watermarked with the member's ID and the date.
 - **KYC**: upload PAN, Aadhaar, address proof, bank proof and a photo, and track each one's status.
 - **My investment**: total invested, shares, the live share price (checked every 30 seconds), a chart of price history and projection, current and projected value, and downloadable share certificates.
+- **Joining VINC animation**: right after login, people walk up in a queue and step through a glowing VINC doorway. The advisor's own figure, tagged "You", is last in line, and when it walks in there's a burst of confetti and the dashboard rises into place card by card. It plays once per login and can be skipped (button or Esc). People who prefer reduced motion don't see it. On the waiting-for-approval screen, the advisor stands at a closed door that swings open and lets them in when the team approves.
 - **Calm ambience**: a soft generated soundscape (Web Audio: slow pads, gentle bells, a faint breath of air), toggled with the equaliser button. Browsers allow sound only after a click, so the portal remembers the choice and starts on the first click.
 
 ## Run it
@@ -77,3 +79,5 @@ test/          node:test API tests
 | ![PDF viewer](docs/screenshots/19-advisor-pdf.png) | ![My investment](docs/screenshots/23-advisor-portfolio.png) |
 | ![Ask the Founder](docs/screenshots/27-chat-resumed.png) | ![Window closed](docs/screenshots/30-expired-gate.png) |
 | ![Waiting for approval](docs/screenshots/13-pending-gate.png) | ![Admin documents](docs/screenshots/08-admin-documents.png) |
+| ![Joining VINC](docs/screenshots/34-welcome-queue.png) | ![You're in](docs/screenshots/35-welcome-done.png) |
+| ![The door opens on approval](docs/screenshots/36-door-opens.png) | ![Admin welcome](docs/screenshots/37-admin-welcome.png) |

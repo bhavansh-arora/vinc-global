@@ -41,6 +41,7 @@
         try {
           const { user } = await VG.api('/api/auth/login', { body: { uid: fd.get('uid').trim(), password: fd.get('password') } });
           btn.textContent = 'Welcome ✓';
+          try { sessionStorage.setItem('vg:intro', '1'); } catch { /* the intro is optional */ }
           setTimeout(() => location.assign(user.role === 'admin' ? '/admin' : '/advisor'), 250);
         } catch (ex) {
           err.textContent = ex.message;

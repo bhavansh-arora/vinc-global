@@ -28,6 +28,8 @@
   let priceTimer = null;
   let chart = null;
   let chat = null;
+  let playIntro = false;
+  let gateScene = null;
 
   document.addEventListener('DOMContentLoaded', init);
 
@@ -36,6 +38,7 @@
     try { me = (await VG.loadMe()).user; } catch { me = null; }
     if (!me) return location.replace('/login');
     if (me.role === 'admin') return location.replace('/admin');
+    playIntro = VG.takeIntroFlag();
     route(me);
   }
 
@@ -49,6 +52,7 @@
   function showGate(me) {
     $('#app').hidden = true;
     if (chat) { chat.destroy(); chat = null; }
+    if (gateScene) { gateScene.destroy(); gateScene = null; }
     const gate = $('#gate');
     gate.hidden = false;
     const first = VG.esc((me.name || '').split(' ')[0] || 'there');
@@ -71,7 +75,7 @@
       const renewal = me.renewal_requested;
       html = `<div class="gate"><canvas id="gate-canvas" aria-hidden="true"></canvas>${tools}
         <div class="gate-card">
-          <div class="gate-art"><span class="ring"></span><span class="ring r2"></span><span class="core"><img src="/img/vinc-mark.svg" alt=""></span></div>
+          <div class="gate-queue" id="gate-queue" aria-hidden="true"></div>
           <p class="label">${renewal ? 'Renewal requested' : 'Waiting for approval'}</p>
           <h1>${renewal ? `We have your request, ${first}` : `Almost there, ${first}`}</h1>
           <p class="lead" style="margin-inline:auto">${renewal ? 'The VINC team will review your request to continue. This page opens by itself the moment they approve it.' : 'Your sign-up is with the VINC team. The portal opens by itself as soon as they approve it, either a 72-hour preview or permanent access.'}</p>
@@ -91,6 +95,8 @@
     sb.classList.toggle('on', !!(window.VGAmbient && window.VGAmbient.playing));
     sb.addEventListener('click', async () => { const on = await window.VGAmbient.toggle(); sb.classList.toggle('on', on); });
     $('#gate-logout').addEventListener('click', VG.logout);
+    // You, standing at the VINC door until the team lets you in.
+    if ($('#gate-queue')) gateScene = VG.queueScene($('#gate-queue'), { others: 0, you: { label: 'You' }, mode: 'waiting' });
     const renew = $('#renew');
     if (renew) {
       animateTimeline(gate);
@@ -104,15 +110,24 @@
         try {
           const { user } = await VG.loadMe();
           if (!user) { clearInterval(timer); return location.replace('/login'); }
-          if (user.state === 'active') { clearInterval(timer); celebrate(); setTimeout(() => route(user), 1400); }
+          if (user.state === 'active') { clearInterval(timer); await celebrate(user); route(user); }
         } catch { /* keep trying */ }
       }, 20000);
     }
   }
 
-  function celebrate() {
+  // Approved while waiting: the door swings open, you walk in, then the portal rises into place.
+  async function celebrate(user) {
     const card = document.querySelector('.gate-card');
-    if (card) card.innerHTML = `<div class="success-burst" style="text-align:center"><svg class="tick" viewBox="0 0 100 100" width="96" height="96" style="margin:0 auto 16px;display:block"><circle cx="50" cy="50" r="45" fill="none" stroke="var(--teal)" stroke-width="5"/><path d="M30 52l13 13 27-29" fill="none" stroke="var(--amber)" stroke-width="7" stroke-linecap="round"/></svg><p class="label">Approved</p><h1>Welcome to VINC Global</h1></div>`;
+    if (!card) return;
+    const swap = (sel, text) => { const el = card.querySelector(sel); if (el) { el.textContent = text; el.animate([{ opacity: 0, translate: '0 10px' }, { opacity: 1, translate: '0 0' }], { duration: 500, easing: 'cubic-bezier(.22,1,.36,1)' }); } };
+    swap('.label', 'Approved');
+    swap('h1', `The door is open, ${(user.name || '').split(' ')[0] || 'friend'}`);
+    swap('.lead', 'Welcome to the VINC circle. Taking you inside…');
+    card.querySelectorAll('.steps-mini .now').forEach((el) => { el.className = 'done'; el.querySelector('b').textContent = '✓ Step 3'; });
+    if (gateScene) await gateScene.admit();
+    await new Promise((r) => setTimeout(r, 1300));
+    if (gateScene) { gateScene.destroy(); gateScene = null; }
   }
 
   // ---------------------------------------------------------------- app
@@ -140,6 +155,21 @@
     renderAll();
     window.addEventListener('hashchange', show);
     show();
+    if (playIntro) {
+      playIntro = false;
+      const first = (me.name || '').split(' ')[0] || 'friend';
+      await VG.welcomeIntro({
+        label: 'Welcome to VINC Global',
+        title: `Opening the doors, ${first}…`,
+        sub: 'Advisors and investors are joining the VINC circle.',
+        doneTitle: `You're in, ${first}.`,
+        doneSub: 'Thank you for backing VINC. Your dashboard is ready.',
+        others: 5,
+        you: { label: 'You' },
+        extra: `<span class="chip mono">${VG.esc(me.uid)}</span><span class="chip ${me.access_type === 'permanent' ? 'ok' : 'teal'}">${me.access_type === 'permanent' ? 'Permanent access' : 'Temporary access'}</span>`,
+      });
+    }
+    VG.riseIn($('.view:not([hidden])'));
     if (!chat) chat = VG.askFounder({ founderName: (VG.settings && VG.settings.founder_name) || 'the Founder' });
     startPricePolling();
   }
