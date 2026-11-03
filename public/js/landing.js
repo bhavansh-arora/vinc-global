@@ -177,6 +177,9 @@
     }), { threshold: 0.4 });
     document.querySelectorAll('.count').forEach((el) => io.observe(el));
 
+    // Section illustrations only animate while on screen.
+    const artIO = new IntersectionObserver((entries) => entries.forEach((en) => en.target.classList.toggle('playing', en.isIntersecting)), { threshold: 0.05 });
+    document.querySelectorAll('.vg-art').forEach((el) => artIO.observe(el));
     sectionPlatforms();
     sectionFeatures();
     sectionSteps();

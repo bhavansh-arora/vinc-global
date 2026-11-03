@@ -665,3 +665,9 @@ dialog.drawer[open] { animation: vg-drawer-in var(--dur-4) var(--ease-out); }
 .switch input:checked + .track { background: var(--teal); }
 .switch input:checked + .track::after { translate: 20px 0; }
 .switch input:focus-visible + .track { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+/* Reduce motion (same rule as the VINC Lab LMS): every animation ends at once and each element falls back
+   to its un-animated style, which is always a complete picture. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: 0.001ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+}
