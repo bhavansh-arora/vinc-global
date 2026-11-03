@@ -171,6 +171,9 @@
         el.innerHTML = f.src === 'member' ? `<button type="button" class="fd-sign">${VG.icon.spark.replace('<svg', '<svg width="12" height="12"')}<span>Click to sign</span></button>` : '<span class="fd-auto">VINC signs here</span>';
       } else if (f.type === 'tick' || f.type === 'strike') {
         el.innerHTML = `<button type="button" class="fd-choice" title="${VG.esc(f.label)}"></button>`;
+      } else if (f.src === 'fixed') {
+        el.innerHTML = `<span class="fd-auto">${VG.esc(f.value || '')}</span>`;
+        el.classList.add('filled');
       } else if (f.src === 'member' && editable) {
         if (f.key === 'relation') {
           el.innerHTML = `<select aria-label="S/o, D/o or W/o"><option>S/o</option><option>D/o</option><option>W/o</option></select><input aria-label="Father's or spouse's name" placeholder="Name">`;
@@ -192,7 +195,7 @@
         sel.addEventListener('change', () => onInput('relation_type', sel.value));
         inp.addEventListener('input', () => onInput('relation_name', inp.value));
       } else if (inp) {
-        const key = f.key === 'member_place' ? 'place' : f.key;
+        const key = f.key === 'member_place' || f.placeOf === 'member' ? 'place' : f.key;
         inp.addEventListener('input', () => onInput(key, f.key === 'pan' ? inp.value.toUpperCase() : inp.value));
       }
       const sign = el.querySelector('.fd-sign');
@@ -215,7 +218,7 @@
           if (inp && document.activeElement !== inp) inp.value = fs.relation_name || '';
           el.classList.toggle('filled', !!fs.relation_name);
         } else if (inp) {
-          const v = f.key === 'member_place' ? state.place : fs[f.key];
+          const v = f.key === 'member_place' || f.placeOf === 'member' ? state.place : fs[f.key];
           if (document.activeElement !== inp) inp.value = v || '';
           el.classList.toggle('filled', !!v);
         } else if (f.type === 'signature' && f.src === 'member') {
@@ -228,7 +231,8 @@
           el.classList.toggle('filled', !!fs[k]);
         } else {
           const span = el.querySelector('.fd-auto');
-          if (span && f.src !== 'company') { const t = preview(f.key); span.textContent = t || ''; el.classList.toggle('filled', !!t); }
+          if (span && f.src === 'fixed') { /* fixed text set once */ }
+          else if (span && f.src !== 'company') { const t = preview(f.key, f); span.textContent = t || ''; el.classList.toggle('filled', !!t); }
           else if (span && f.src === 'company' && f.type !== 'signature') span.textContent = 'Filled when VINC signs';
         }
       }
@@ -260,7 +264,7 @@
         for (const f of order) {
           const b = boxes[f.key];
           if (!b || b.el.classList.contains('filled')) continue;
-          if (f.key === 'address2') continue;              // optional
+          if (f.key === 'address2' || f.optional || f.type === 'signature') continue;              // optional, or signed in the panel
           b.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           b.el.classList.remove('nudge'); void b.el.offsetWidth; b.el.classList.add('nudge');
           const inp = b.el.querySelector('input, button');

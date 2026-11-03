@@ -315,14 +315,17 @@
 
   function agreementBanner() {
     const list = data.agreements || [];
-    const pending = list.find((a) => a.status === 'pending');
+    const pendingAll = list.filter((a) => a.status === 'pending' && a.mandatory !== false);
+    const pending = pendingAll[0] || list.find((a) => a.status === 'pending');
+    const names = (pendingAll.length ? pendingAll : list.filter((a) => a.status === 'pending')).map((a) => a.title);
+    const nameText = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
     const waiting = list.find((a) => a.status === 'member_signed');
     if (pending) {
       return `<a class="card agr-banner" href="#agreements">
         <span class="agr-ic">${VG.icon.file}</span>
         <div style="flex:1;min-width:0"><p class="label" style="margin:0 0 2px">One step to permanent membership</p>
-          <h3 style="margin:0">Sign your ${VG.esc(pending.title)}</h3>
-          <p class="muted small" style="margin:2px 0 0">Fill in a few details and sign on screen. It takes about three minutes.</p></div>
+          <h3 style="margin:0">Sign your ${VG.esc(nameText)}</h3>
+          <p class="muted small" style="margin:2px 0 0">Fill in a few details and sign on screen. It takes about ${names.length > 1 ? 'five' : 'three'} minutes.</p></div>
         <span class="btn btn-amber btn-sm">Review and sign ${VG.icon.arrow}</span></a>`;
     }
     if (waiting) {

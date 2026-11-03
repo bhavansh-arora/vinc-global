@@ -147,3 +147,72 @@ test('with automatic countersigning, an investor is permanent as soon as they si
   const pdf = await inv('GET', `/api/member/agreements/${ag.id}/document`);
   assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 10);
 });
+
+test('an advisor must sign both the Advisory Agreement and the Term Sheet to become permanent', async () => {
+  const admin = client(), adv = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });     // both documents uploaded, auto countersign on
+  const gen = await admin('POST', '/api/admin/users', { role: 'advisor', name: 'Two Docs', email: 'two@example.com', password: 'Secret123', access: 'temporary' });
+  await adv('POST', '/api/auth/login', { uid: gen.body.uid, password: 'Secret123' });
+  const list = (await adv('GET', '/api/member/agreements')).body.agreements;
+  assert.deepEqual(list.map((a) => a.kind).sort(), ['advisory', 'term_sheet']);
+  const sign = (a, extra = {}) => adv('POST', `/api/member/agreements/${a.id}/sign`, { fields: { ...FIELDS, name: 'Two Docs', ...extra }, place: 'Pune', consent: true, signature: pngDataUrl() });
+  const first = await sign(list.find((a) => a.kind === 'advisory'));
+  assert.equal(first.body.executed, true);
+  assert.equal(first.body.upgraded, false, 'still needs the term sheet');
+  assert.equal(first.body.user.access_type, 'temporary');
+  const second = await sign(list.find((a) => a.kind === 'term_sheet'), { residence: 'resident', ticket: '1' });
+  assert.equal(second.body.upgraded, true);
+  assert.equal(second.body.user.access_type, 'permanent');
+});
+
+test('admin uploads any agreement, its blanks are found, and it is sent to a group', async () => {
+  const admin = client(), inv = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  // A one-page NDA with two underscore blanks
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.2, 841.92]);
+  const { StandardFonts } = require('pdf-lib');
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('NON-DISCLOSURE AGREEMENT', { x: 72, y: 760, size: 16, font });
+  page.drawText('Name of the recipient: ______________________', { x: 72, y: 700, size: 11, font });
+  page.drawText('Signature: ______________________', { x: 72, y: 640, size: 11, font });
+  const fd = new FormData();
+  fd.append('title', 'Non-Disclosure Agreement');
+  fd.append('file', new Blob([Buffer.from(await doc.save())], { type: 'application/pdf' }), 'nda.pdf');
+  const up = await admin('POST', '/api/admin/agreements/custom', undefined, fd);
+  assert.equal(up.status, 200);
+  assert.equal(up.body.blanks_list.length, 2);
+  assert.equal(up.body.blanks_list[0].mode, 'member');
+  assert.match(up.body.blanks_list[0].hint, /Name of the recipient/);
+  assert.equal(up.body.blanks_list[1].mode, 'skip', 'signature lines are not guessed');
+
+  // Admin decides what each blank is for
+  const cfg = await admin('PUT', `/api/admin/agreements/custom/${up.body.id}`, { blanks: [{ id: 1, mode: 'member', label: 'Full name' }, { id: 2, mode: 'member_signature', label: 'Signature' }] });
+  assert.equal(cfg.body.used_blanks, 2);
+  assert.equal((await admin('PUT', `/api/admin/agreements/custom/${up.body.id}`, { blanks: [{ id: 2, mode: 'company', value: '' }] })).status, 400);
+
+  // Send it to every investor
+  const sent = await admin('POST', '/api/admin/agreements/send', { template_id: up.body.id, audience: 'investors' });
+  assert.equal(sent.body.sent, 1);
+  assert.equal((await admin('POST', '/api/admin/agreements/send', { template_id: up.body.id, audience: 'investors' })).body.reminded, 1);
+
+  // The investor (already permanent) sees and signs it; it is not required, so nothing else changes
+  await inv('POST', '/api/auth/login', { uid: (await admin('GET', '/api/admin/users')).body.find((u) => u.name === 'Neha Gupta').uid, password: 'Secret123' });
+  const nda = (await inv('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'custom');
+  assert.equal(nda.title, 'Non-Disclosure Agreement');
+  assert.equal(nda.mandatory, false);
+  const detail = await inv('GET', `/api/member/agreements/${nda.id}`);
+  assert.equal(detail.body.spec.custom, true);
+  assert.deepEqual(detail.body.spec.fields.map((f) => f.key), ['b1', 'sig2']);
+  assert.equal((await inv('POST', `/api/member/agreements/${nda.id}/sign`, { fields: {}, place: 'Mumbai', consent: true, signature: pngDataUrl() })).status, 400);
+  const signed = await inv('POST', `/api/member/agreements/${nda.id}/sign`, { fields: { b1: 'Neha Gupta' }, place: 'Mumbai', consent: true, signature: pngDataUrl() });
+  assert.equal(signed.body.executed, true);
+  assert.equal(signed.body.user.access_type, 'permanent');
+  const pdf = await inv('GET', `/api/member/agreements/${nda.id}/document`);
+  assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 3, 'document + signature page + certificate');
+
+  // Withdrawing it voids copies nobody has signed yet
+  const listed = (await admin('GET', '/api/admin/agreements')).body.custom;
+  assert.equal(listed.find((c) => c.id === up.body.id).executed, 1);
+  assert.equal((await admin('DELETE', `/api/admin/agreements/custom/${up.body.id}`)).body.ok, true);
+});

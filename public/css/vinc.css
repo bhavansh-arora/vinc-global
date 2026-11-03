@@ -767,3 +767,22 @@ dialog.dlg.cs-dlg { width: min(980px, calc(100vw - 24px)); }
 .cs-grid .t th { width: 38%; }
 .cs-membersig { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fffdf8; display: grid; place-items: center; }
 .cs-membersig img { max-height: 70px; max-width: 100%; }
+
+.custom-form { padding: 14px; margin-bottom: 14px; border: 1.5px dashed var(--line); border-radius: var(--radius-sm); background: var(--card-2); }
+dialog.dlg.cfg-dlg { width: min(1180px, calc(100vw - 24px)); }
+.cfg-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .cfg-grid { grid-template-columns: minmax(0, 1fr); } }
+.cfg-doc { max-height: 70dvh; overflow-y: auto; display: grid; gap: 12px; padding: 4px; background: var(--paper-2); border-radius: var(--radius-sm); }
+.cfg-doc .fd-field.src-auto { background: rgba(240, 180, 76, .3); outline: 1.5px solid var(--amber); }
+.cfg-doc .fd-field.src-auto .fd-auto { font: 700 calc(var(--fs) * .95)/1 var(--mono); color: var(--amber-ink); font-style: normal; }
+.cfg-doc .fd-field.off { background: rgba(110, 84, 66, .08); outline: 1px dashed rgba(110, 84, 66, .4); }
+.cfg-side { max-height: 70dvh; overflow-y: auto; padding-right: 4px; }
+.cfg-list { display: grid; gap: 10px; margin-bottom: 12px; }
+.cfg-row { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.cfg-row.off { opacity: .6; }
+.cfg-row .input { min-height: 36px; margin-top: 6px; font-size: .9rem; }
+.cfg-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--amber); color: #2B1A10; font: 700 .85rem var(--mono); flex: none; }
+.pick-list { max-height: 300px; overflow-y: auto; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; background: var(--card); }
+.pick-row { padding: 6px 8px; border-radius: 8px; }
+.pick-row:hover { background: var(--paper-2); }
+.pick-row[hidden] { display: none; }

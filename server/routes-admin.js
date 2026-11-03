@@ -140,8 +140,10 @@ r.post('/users/:id/approve', (req, res) => {
   const fresh = userRow(u.id);
   notify.approved(fresh);
   // Ask them to sign their onboarding agreement, if it is ready and not yet signed.
-  const { agreement, created } = require('./agreements').ensureFor(fresh, undefined, 'Admin');
-  if (agreement && (created || agreement.status === 'pending')) notify.agreementReady(fresh, require('./agreements').KINDS[agreement.kind].title);
+  const AGM = require('./agreements');
+  AGM.ensureRole(fresh, 'Admin');
+  const toSign = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status = 'pending' AND mandatory = 1").all(fresh.id);
+  if (toSign.length) notify.agreementReady(fresh, toSign.map((a) => AGM.titleOf(a)).join(' and '));
   res.json(A.publicUser(fresh));
 });
 

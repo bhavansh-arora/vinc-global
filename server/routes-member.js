@@ -58,9 +58,9 @@ r.get('/overview', (req, res) => {
     portfolio: portfolio(u.id),
     agreements: (() => {
       const AGM = require('./agreements');
-      AGM.ensureFor(u);
-      return db.prepare("SELECT kind, status FROM agreements WHERE user_id = ? AND status != 'void'").all(u.id)
-        .map((a) => ({ kind: a.kind, title: AGM.KINDS[a.kind].title, status: a.status }));
+      AGM.ensureRole(u);
+      return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY mandatory DESC, id").all(u.id)
+        .map((a) => ({ kind: a.kind, title: AGM.titleOf(a), status: a.status, mandatory: !!a.mandatory }));
     })(),
   });
 });

@@ -18,7 +18,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **Share price**: publish the actual price (the live price members see) and projected prices.
 - **Founder Q&A**: the admin is the founder. Every member who has signed up is listed by name, with search and *All / Needs reply / Unread* filters. Choose a name and that advisor's chat opens, with their full history and quick replies. You can start a conversation with anyone. Replies are signed with the founder name set in **Settings**.
 - **Welcome animation**: on login, members arrive and walk through the VINC door, and anyone awaiting approval is left "Waiting" at the door, with a shortcut to review them.
-- **Agreements**: upload the Advisory Agreement and Investor Term Sheet, save the company signature, send agreements for signature, countersign (or sign automatically), view the executed PDFs and their audit trail, or void and ask for a fresh signature.
+- **Agreements**: upload the Advisory Agreement and Investor Term Sheet and any other agreement, set up its blanks, send it to one member, a selection or a whole group, save the company signature, countersign (or sign automatically), view the executed PDFs and their audit trail, or void and ask for a fresh signature.
 - **Settings**: company name, founder name, currency, the length of the temporary window, and the admin password.
 
 **Advisor / investor (`/signup`, then `/advisor`)**:
@@ -33,13 +33,20 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 
 ## Onboarding agreements
 
-Advisors sign the **Advisory Agreement** and investors the **Investor Term Sheet**. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
+**Advisors** must sign the **Advisory Agreement** and the **Investor Term Sheet**; **investors** must sign the **Investor Term Sheet**. Both appear automatically in the member's Agreements section. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
+
+**Other agreements.** The admin can upload any PDF (an NDA, a side letter, an addendum):
+- Its underscore blanks are found automatically. Next to a preview of the document, the admin sets what each one is for: the member fills it in (required or optional), fixed text typed once, the agreement date, a member's or the company's signature, date or place, or left blank.
+- It can be marked **required for permanent membership** or optional.
+- It is sent to selected members, all advisors, all investors or everyone, and each person gets an email.
+- A signature page with both signatures, dates, times and places is added at the end, then the certificate page.
+- It can be withdrawn; unsigned copies are voided and signed ones are kept.
 
 - **Filling and signing.** The member fills in the blanks right on the document: name, S/o / D/o / W/o, address, PAN, email and phone; for the term sheet, residential status (the other option is struck out) and ticket size. They then sign by drawing or typing their name.
 - **Captured at signing:** the date and time (IST), the place they enter, their IP address and device, and their location if they choose to share it.
 - **Company signature.** The company side is signed for VINC DEEPTECH PRIVATE LIMITED by the signatory set in Admin → Agreements, with its own date, time and place. The admin either countersigns each agreement or switches on **Countersign automatically**, which applies the saved company signature as soon as a member signs.
 - **The executed PDF** is the original document with the blanks filled and both signatures. Every page carries a reference, and a final signature-certificate page records both signers, the times, the places, IPs, the consent text and the full audit trail. It is emailed to the member and the admin, and its SHA-256 fingerprint is kept.
-- **Permanent membership.** Once all of a member's agreements are executed, the member becomes **permanent** automatically. The admin can void an agreement to have it signed again.
+- **Permanent membership.** Once every required agreement is executed, the member becomes **permanent** automatically. Optional agreements do not affect this. The admin can void an agreement to have it signed again.
 - **Where the blanks are.** Field positions live in `server/agreements.js`, measured on the supplied PDFs; the admin page shows whether an uploaded file is the exact measured version.
 
 ## Email

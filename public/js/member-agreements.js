@@ -19,7 +19,7 @@
     try { d = await VG.api('/api/member/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const me = VG.me || {};
     el.innerHTML = `<div class="section-title"><div><h2>Your agreements</h2>
-        <p>${me.access_type === 'permanent' ? 'Your signed onboarding documents with VINC DEEPTECH PRIVATE LIMITED.' : 'Sign your onboarding document to become a permanent member of the VINC circle.'}</p></div></div>
+        <p>${me.access_type === 'permanent' ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
       ${d.waiting_for_template ? `<div class="card">${emptyHtml('The VINC team is preparing your agreement. It will appear here, and you will get an email when it is ready.')}</div>` : ''}
       <div class="grid" style="gap:16px">${d.agreements.map(card).join('')}</div>
       <div class="card agr-note"><h3>How signing works</h3>
@@ -36,6 +36,11 @@
     }));
   }
 
+  function requiredNames(list) {
+    const names = list.filter((a) => a.mandatory).map((a) => a.title);
+    return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || '';
+  }
+
   function emptyHtml(text) { return `<div class="empty">${VG.icon.file}<p>${VG.esc(text)}</p></div>`; }
 
   function card(a) {
@@ -43,7 +48,7 @@
     return `<article class="card agr-card ${a.status}">
       <span class="agr-ic">${VG.icon.file}</span>
       <div class="agr-main"><p class="label" style="margin:0 0 4px">${VG.esc(a.ref)}</p><h3 style="margin:0 0 6px">${VG.esc(a.title)}</h3>
-        <div class="btn-row" style="gap:8px"><span class="chip ${cls}"><span class="dot"></span>${label}</span>
+        <div class="btn-row" style="gap:8px"><span class="chip ${cls}"><span class="dot"></span>${label}</span>${a.mandatory ? '<span class="chip">Required</span>' : '<span class="chip">Optional</span>'}
           ${a.member_signed_at ? `<span class="muted small">You signed ${VG.dateTime(a.member_signed_at)}${a.member_place ? ', ' + VG.esc(a.member_place) : ''}</span>` : ''}
           ${a.company_signed_at ? `<span class="muted small">· VINC signed ${VG.dateTime(a.company_signed_at)}</span>` : ''}</div>
         ${a.last_void_reason && a.status === 'pending' ? `<p class="small" style="margin:8px 0 0;color:var(--bad)">The team asked you to sign again: ${VG.esc(a.last_void_reason)}</p>` : ''}</div>
@@ -61,12 +66,14 @@
     const ag = d.agreement;
     if (ag.status !== 'pending') { location.hash = '#agreements'; return; }
     const isTS = ag.kind === 'term_sheet';
+    const custom = !!d.spec.custom;
+    const customFields = custom ? d.spec.fields.filter((f) => f.src === 'member' && !f.type && !f.placeOf) : [];
     const state = {
       fields: { relation_type: 'S/o', ...pick(d.prefill, ['name', 'relation_type', 'relation_name', 'address1', 'address2', 'pan', 'email', 'phone', 'residence', 'ticket']) },
       place: '', signature: null, geo: null, consent: false,
     };
     const now = () => new Date();
-    const preview = (key) => {
+    const preview = (key, fd) => {
       const t = now();
       if (key === 'date_day') { const n = t.getDate(); const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
       if (key === 'date_month') return t.toLocaleString('en-GB', { month: 'long' });
@@ -74,6 +81,12 @@
       if (key === 'member_name') return state.fields.name || '';
       if (key === 'member_date') return 'When you sign';
       if (key === 'ticket_chosen') return d.tickets[state.fields.ticket] || '';
+      if (custom && fd) {
+        const f = fd;
+        if (f.mode === 'member_name') return (VG.me && VG.me.name) || '';
+        if (f.mode === 'member_date') return 'When you sign';
+        if (f.mode === 'date') return 'On signing';
+      }
       return '';
     };
 
@@ -83,8 +96,9 @@
       <div class="sign-layout">
         <div class="sign-doc" id="sign-doc"><div class="viewer-loading"><div class="spinner"></div></div></div>
         <aside class="sign-panel card" id="sign-panel">
-          <h3>1 · Your details</h3>
-          <p class="muted small" style="margin-top:-6px">Type on the document, or here. Both stay in step.</p>
+          <h3>1 · ${custom ? 'Fill in the blanks' : 'Your details'}</h3>
+          <p class="muted small" style="margin-top:-6px">${custom && !customFields.length ? 'There is nothing to fill in on this document. Read it, then sign below.' : 'Type on the document, or here. Both stay in step.'}</p>
+          ${custom ? customFields.map((f) => `<label class="field"><span>${VG.esc(f.label)}${f.optional ? ' <span class="hint">optional</span>' : ''}</span><input class="input" data-k="${f.key}" maxlength="120"></label>`).join('') : `
           <label class="field"><span>Full name</span><input class="input" data-k="name" maxlength="80" autocomplete="name"></label>
           <div class="field"><span>S/o / D/o / W/o</span><div class="rel-row"><select class="input" data-k="relation_type"><option>S/o</option><option>D/o</option><option>W/o</option></select><input class="input" data-k="relation_name" maxlength="80" placeholder="Father's or spouse's name"></div></div>
           <label class="field"><span>Address</span><input class="input" data-k="address1" maxlength="60" placeholder="House, street, area" autocomplete="address-line1"></label>
@@ -98,7 +112,7 @@
               <button type="button" data-v="resident">Resident Indian</button><button type="button" data-v="nonresident">Non-Resident</button></div>
               <span class="hint">The other one is struck out on the document.</span></div>
             <div class="field"><span>Ticket size</span><div class="choice-row col" data-choice="ticket">
-              <button type="button" data-v="1"><b>Option 1</b> · Rs. 6,00,000</button><button type="button" data-v="2"><b>Option 2</b> · Rs. 12,00,000</button></div></div>` : ''}
+              <button type="button" data-v="1"><b>Option 1</b> · Rs. 6,00,000</button><button type="button" data-v="2"><b>Option 2</b> · Rs. 12,00,000</button></div></div>` : ''}`}
           <h3>2 · Place, date and time</h3>
           <label class="field"><span>Place of signing</span><input class="input" data-k="place" maxlength="60" placeholder="e.g. Bengaluru"></label>
           <div class="geo-row"><button type="button" class="btn btn-soft btn-sm" id="geo-btn">${VG.icon.spark.replace('<svg', '<svg width="14" height="14"')} Add my location <span class="muted">(optional)</span></button><span class="muted small" id="geo-status"></span></div>
@@ -114,7 +128,8 @@
       </div>`;
 
     const panel = $('#sign-panel');
-    const pad = VG.SignaturePad($('#sigpad'), { name: state.fields.name || '', onChange: async () => { state.signature = pad.isEmpty() ? null : await pad.toDataURL(); update(); } });
+    if (custom) state.fields = {};
+    const pad = VG.SignaturePad($('#sigpad'), { name: state.fields.name || (VG.me && VG.me.name) || '', onChange: async () => { state.signature = pad.isEmpty() ? null : await pad.toDataURL(); update(); } });
     let doc = null;
 
     function update() {
@@ -126,7 +141,7 @@
       });
       $$('[data-choice]', panel).forEach((row) => $$('button', row).forEach((b) => b.setAttribute('aria-pressed', String(state.fields[row.dataset.choice] === b.dataset.v))));
       // Progress
-      const req = [...REQUIRED, ...(isTS ? ['residence', 'ticket'] : [])];
+      const req = custom ? customFields.filter((f) => !f.optional).map((f) => f.key) : [...REQUIRED, ...(isTS ? ['residence', 'ticket'] : [])];
       const done = req.filter((k) => (state.fields[k] || '').trim()).length + (state.place.trim() ? 1 : 0) + (state.signature ? 1 : 0);
       const total = req.length + 2;
       $('.sp-text', el).textContent = `${done} of ${total} done`;
