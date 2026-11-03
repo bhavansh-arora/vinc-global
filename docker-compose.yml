@@ -1,5 +1,6 @@
-# VINC Global: one container, its own data volume, reachable only from the VPS itself.
-# Your existing web server (nginx / Caddy / Traefik) forwards vinc-global.com to it.
+# VINC Global: one container with its own data volume.
+# Caddy (crm-caddy-1) reaches it as http://vinc-global:3000 over the vinc-global-web network;
+# port 3010 is bound to 127.0.0.1 only, for testing from the VPS itself.
 services:
   vinc-global:
     build: .
@@ -12,9 +13,14 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Vinc@2026}   # only used the very first time
       MAX_UPLOAD_MB: "25"
     ports:
-      - "127.0.0.1:${VG_PORT:-3010}:3000"            # not exposed to the internet directly
+      - "127.0.0.1:${VG_PORT:-3010}:3000"
     volumes:
       - vinc-global-data:/data                        # SQLite database + uploads
+    networks:
+      - vinc-global-web
 volumes:
   vinc-global-data:
     name: vinc-global-data
+networks:
+  vinc-global-web:
+    name: vinc-global-web
