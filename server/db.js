@@ -154,6 +154,45 @@ CREATE TABLE IF NOT EXISTS id_requests (
 );
 `);
 
+db.exec(`
+-- Onboarding agreements (see server/agreements.js).
+CREATE TABLE IF NOT EXISTS agreement_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet')),
+  stored_name TEXT NOT NULL,
+  original_name TEXT,
+  sha256 TEXT,
+  pages INTEGER,
+  active INTEGER NOT NULL DEFAULT 1,
+  uploaded_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agreements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ref TEXT NOT NULL UNIQUE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet')),
+  template_id INTEGER REFERENCES agreement_templates(id),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','member_signed','executed','void')),
+  fields TEXT,
+  member_sig TEXT, member_signed_at INTEGER, member_place TEXT, member_geo TEXT, member_ip TEXT, member_ua TEXT,
+  company_sig TEXT, company_signed_at INTEGER, company_place TEXT, company_signer TEXT, company_method TEXT, company_ip TEXT,
+  executed_name TEXT, executed_sha256 TEXT,
+  void_reason TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_agreements_user ON agreements(user_id, kind);
+CREATE TABLE IF NOT EXISTS agreement_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agreement_id INTEGER NOT NULL REFERENCES agreements(id) ON DELETE CASCADE,
+  at INTEGER NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  detail TEXT,
+  ip TEXT
+);
+`);
+
 // Columns added after the first release: add them to existing databases.
 function addColumn(table, column, ddl) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);

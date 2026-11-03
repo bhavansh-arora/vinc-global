@@ -56,6 +56,12 @@ r.get('/overview', (req, res) => {
     kyc,
     log: db.prepare('SELECT action, detail, at FROM access_log WHERE user_id = ? ORDER BY at DESC LIMIT 12').all(u.id),
     portfolio: portfolio(u.id),
+    agreements: (() => {
+      const AGM = require('./agreements');
+      AGM.ensureFor(u);
+      return db.prepare("SELECT kind, status FROM agreements WHERE user_id = ? AND status != 'void'").all(u.id)
+        .map((a) => ({ kind: a.kind, title: AGM.KINDS[a.kind].title, status: a.status }));
+    })(),
   });
 });
 

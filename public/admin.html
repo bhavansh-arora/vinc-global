@@ -8,7 +8,7 @@
 <link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&family=Caveat:wght@500&family=Dancing+Script:wght@600&display=swap">
 <script src="/js/theme-init.js"></script>
 <link rel="stylesheet" href="/css/vinc.css">
 <title>Admin · VINC Global</title>
@@ -22,6 +22,7 @@
       <a href="#approvals" data-view="approvals"><span data-ic="clock"></span>Approvals<span class="badge" data-badge="pending"></span></a>
       <a href="#requests" data-view="requests"><span data-ic="inbox"></span>ID requests<span class="badge" data-badge="requests"></span></a>
       <a href="#members" data-view="members"><span data-ic="users"></span>Members &amp; IDs</a>
+      <a href="#agreements" data-view="agreements"><span data-ic="file"></span>Agreements<span class="badge" data-badge="agreements_to_sign"></span></a>
       <a href="#documents" data-view="documents"><span data-ic="vault"></span>Documents</a>
       <a href="#news" data-view="news"><span data-ic="news"></span>News</a>
       <a href="#kyc" data-view="kyc"><span data-ic="id"></span>KYC review<span class="badge" data-badge="kyc_pending"></span></a>
@@ -51,6 +52,7 @@
       <section class="view" data-view="approvals" hidden></section>
       <section class="view" data-view="requests" hidden></section>
       <section class="view" data-view="members" hidden></section>
+      <section class="view" data-view="agreements" hidden></section>
       <section class="view" data-view="documents" hidden></section>
       <section class="view" data-view="news" hidden></section>
       <section class="view" data-view="kyc" hidden></section>
@@ -68,6 +70,8 @@
 <script src="/js/viewer.js"></script>
 <script src="/vendor/chartjs/chart.umd.min.js"></script>
 <script src="/js/queue.js"></script>
+<script src="/js/sign.js"></script>
+<script src="/js/admin-agreements.js"></script>
 <script src="/js/chat.js"></script>
 <script src="/js/admin.js"></script>
 </body>

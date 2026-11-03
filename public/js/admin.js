@@ -19,6 +19,7 @@
     approvals: ['Approvals', 'New sign-ups and renewal requests'],
     requests: ['ID requests', 'People who asked for a VINC ID on the website'],
     members: ['Members & IDs', 'Generate IDs for advisors and investors'],
+    agreements: ['Agreements', 'Advisory agreements and term sheets · sign, countersign, track'],
     documents: ['Documents', 'Publish PDFs, Excel sheets and links · view only for members'],
     news: ['News', 'Publish updates to members or the public site'],
     kyc: ['KYC review', 'Verify member documents'],
@@ -72,14 +73,15 @@
     }
     VG.riseIn($('.view:not([hidden])'));
     setInterval(async () => {
-      const before = stats ? stats.pending + stats.unread + stats.kyc_pending + stats.requests : 0;
+      const before = stats ? stats.pending + stats.unread + stats.kyc_pending + stats.requests + stats.agreements_to_sign : 0;
       await loadStats();
-      const after = stats.pending + stats.unread + stats.kyc_pending + stats.requests;
+      const after = stats.pending + stats.unread + stats.kyc_pending + stats.requests + stats.agreements_to_sign;
       if (after > before) {
         VG.toast('Something new needs your attention.', 'ok');
         if (current === 'overview') renderOverview();
         if (current === 'approvals') { await loadUsers(); renderApprovals(); }
         if (current === 'requests') renderRequests();
+        if (current === 'agreements') RENDER.agreements();
       }
     }, 20000);
   });
@@ -91,7 +93,8 @@
   }
 
   const RENDER = {
-    overview: renderOverview, approvals: renderApprovals, requests: renderRequests, members: renderMembers, documents: renderDocuments,
+    overview: renderOverview, approvals: renderApprovals, requests: renderRequests,
+    agreements: () => VG.adminAgreements.render(viewEl('agreements'), { refreshStats: loadStats }), members: renderMembers, documents: renderDocuments,
     news: renderNews, kyc: renderKyc, investments: renderInvestments, prices: renderPrices, chats: renderChats, settings: renderSettings,
   };
 
@@ -141,7 +144,7 @@
     el.innerHTML = `
       <div class="hello"><canvas id="hello-canvas" aria-hidden="true"></canvas>
         <div class="hello-row"><div><p class="label">Admin · all rights</p><h2>${VG.greeting()}, founder</h2>
-          <p>${s.pending ? `${s.pending} ${s.pending === 1 ? 'person is' : 'people are'} waiting for approval.` : 'Nobody is waiting for approval.'} ${s.unread ? `${s.unread} unread message${s.unread === 1 ? '' : 's'} in Ask the Founder.` : ''} ${s.requests ? `${s.requests} new VINC ID request${s.requests === 1 ? '' : 's'} from the website.` : ''}</p></div>
+          <p>${s.pending ? `${s.pending} ${s.pending === 1 ? 'person is' : 'people are'} waiting for approval.` : 'Nobody is waiting for approval.'} ${s.unread ? `${s.unread} unread message${s.unread === 1 ? '' : 's'} in Ask the Founder.` : ''} ${s.requests ? `${s.requests} new VINC ID request${s.requests === 1 ? '' : 's'} from the website.` : ''} ${s.agreements_to_sign ? `${s.agreements_to_sign} signed agreement${s.agreements_to_sign === 1 ? ' needs' : 's need'} your countersignature.` : ''}</p></div>
           <div class="btn-row"><a class="btn btn-amber btn-sm" href="#members">${VG.icon.plus} Generate an ID</a><a class="btn btn-ghost btn-sm" style="border-color:var(--on-band);color:var(--on-band)" href="#documents">${VG.icon.upload} Publish a document</a></div></div>
       </div>
       <div class="grid grid-4">
@@ -405,6 +408,8 @@
           <div class="btn-row"><button class="btn btn-soft btn-xs" data-view-cert="${c.id}" data-mime="${VG.esc(c.mime)}" data-title="${VG.esc(c.title)}">View</button><button class="btn btn-danger btn-xs" data-del-cert="${c.id}">Delete</button></div></div>`).join('') || '<p class="muted" style="margin:0">None issued yet.</p>'}</div>
         ${certificateForm(u.id)}</div>
 
+      <div class="card" id="m-agr"><h3>Agreements</h3><div class="viewer-loading" style="min-height:60px"><div class="spinner"></div></div></div>
+
       <div class="card"><h3>Activity</h3>${d.log.length ? `<ul class="log">${d.log.map((l) => `<li><b>${VG.esc(LOG_LABELS[l.action] || l.action)}</b>${l.detail ? ' · ' + VG.esc(l.detail) : ''}<time>${VG.dateTime(l.at)}</time></li>`).join('')}</ul>` : '<p class="muted">No activity yet.</p>'}</div>
 
       <div class="card" style="border-color:color-mix(in srgb,var(--bad) 40%,var(--line))"><h3>Delete member</h3><p class="muted small">Removes the ID, KYC files, investments, certificates and chat history. This cannot be undone.</p><button class="btn btn-danger btn-sm" id="m-delete">${VG.icon.trash} Delete ${VG.esc(u.uid)}</button></div>`;
@@ -439,6 +444,7 @@
       try { await VG.api(`/api/admin/users/${id}`, { method: 'DELETE' }); dlg.close(); VG.toast('Member deleted.', 'ok'); await Promise.all([loadUsers(), loadStats()]); repaint(); } catch (ex) { fail(ex); }
     });
     bindKycActions(inner, d.kyc, reopen);
+    paintMemberAgreements(u, reopen);
     bindInvestmentForm(inner, reopen);
     bindCertificateForm(inner, reopen);
     $$('[data-del-inv]', inner).forEach((b) => b.addEventListener('click', async () => {
@@ -450,6 +456,26 @@
       try { await VG.api(`/api/admin/certificates/${b.dataset.delCert}`, { method: 'DELETE' }); await reopen(); } catch (e) { fail(e); }
     }));
     $$('[data-view-cert]', inner).forEach((b) => b.addEventListener('click', () => VG.openStored(b.dataset.title, b.dataset.mime, `/api/files/cert/${b.dataset.viewCert}/raw`)));
+  }
+
+  async function paintMemberAgreements(u, reopen) {
+    const box = $('#m-agr');
+    if (!box) return;
+    let d;
+    try { d = await VG.api('/api/admin/agreements'); } catch { box.innerHTML = '<h3>Agreements</h3><p class="muted">Could not load.</p>'; return; }
+    const rows = d.rows.filter((r) => r.user.id === u.id);
+    const label = { not_sent: 'Not sent', pending: 'Waiting for member', member_signed: 'Countersign needed', executed: 'Executed' };
+    const kinds = [['advisory', 'Advisory Agreement'], ['term_sheet', 'Investor Term Sheet']];
+    box.innerHTML = `<h3>Agreements</h3>
+      ${rows.length ? `<ul class="log">${rows.map((r) => `<li><b>${VG.esc(r.title)}</b> · ${label[r.status]}${r.ref ? ` · <span class="mono">${VG.esc(r.ref)}</span>` : ''}<time>${r.company_signed_at ? 'Executed ' + VG.dateTime(r.company_signed_at) : r.member_signed_at ? 'Member signed ' + VG.dateTime(r.member_signed_at) : ''}</time></li>`).join('')}</ul>` : ''}
+      <div class="btn-row" style="margin-top:10px">${kinds.filter(([k]) => !rows.some((r) => r.kind === k && r.status !== 'not_sent'))
+        .map(([k, t]) => `<button class="btn btn-soft btn-xs" data-agr-send="${k}">${VG.icon.send.replace('<svg', '<svg width="13" height="13"')} Send ${t}</button>`).join('')}
+        <a class="btn btn-soft btn-xs" href="#agreements">Open agreements</a></div>`;
+    $$('[data-agr-send]', box).forEach((b) => b.addEventListener('click', () => VG.busy(b, async () => {
+      try { await VG.api('/api/admin/agreements/send', { body: { user_id: u.id, kind: b.dataset.agrSend } }); VG.toast('Sent for signature.', 'ok'); reopen(); }
+      catch (e) { fail(e); }
+    })));
+    box.querySelector('a[href="#agreements"]').addEventListener('click', () => $('#drawer').close());
   }
 
   // ---------------------------------------------------------------- KYC helpers

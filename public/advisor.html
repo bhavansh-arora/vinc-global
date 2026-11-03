@@ -8,7 +8,7 @@
 <link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&family=Caveat:wght@500&family=Dancing+Script:wght@600&display=swap">
 <script src="/js/theme-init.js"></script>
 <link rel="stylesheet" href="/css/vinc.css">
 <title>Advisor portal · VINC Global</title>
@@ -21,6 +21,7 @@
     <a class="brand" href="/" data-brand></a>
     <nav>
       <a href="#home" data-view="home"><span data-ic="home"></span>Home</a>
+      <a href="#agreements" data-view="agreements"><span data-ic="file"></span>Agreements<span class="badge" id="agr-badge"></span></a>
       <a href="#news" data-view="news"><span data-ic="news"></span>News</a>
       <a href="#vault" data-view="vault"><span data-ic="vault"></span>Data room</a>
       <a href="#kyc" data-view="kyc"><span data-ic="id"></span>KYC documents<span class="badge" id="kyc-badge"></span></a>
@@ -45,6 +46,7 @@
     </header>
     <main class="content" id="content">
       <section class="view" data-view="home" hidden></section>
+      <section class="view" data-view="agreements" hidden></section>
       <section class="view" data-view="news" hidden></section>
       <section class="view" data-view="vault" hidden></section>
       <section class="view" data-view="kyc" hidden></section>
@@ -59,6 +61,8 @@
 <script src="/js/viewer.js"></script>
 <script src="/vendor/chartjs/chart.umd.min.js"></script>
 <script src="/js/queue.js"></script>
+<script src="/js/sign.js"></script>
+<script src="/js/member-agreements.js"></script>
 <script src="/js/chat.js"></script>
 <script src="/js/advisor.js"></script>
 </body>

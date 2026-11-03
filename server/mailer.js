@@ -83,8 +83,8 @@ async function pump() {
     const job = queue.shift();
     if (!transport) { log.run(job.to, job.subject, job.kind, 'skipped', 'Email is not set up (SMTP_HOST missing).', Date.now()); continue; }
     try {
-      const info = await transport.sendMail({ from: FROM, to: job.to, replyTo: job.replyTo || ADMIN_EMAIL || undefined, subject: job.subject, html: job.html, text: job.text });
-      if (cfg.json) { sent.push({ to: job.to, subject: job.subject, kind: job.kind, text: job.text }); if (sent.length > 200) sent.shift(); void info; }
+      const info = await transport.sendMail({ from: FROM, to: job.to, replyTo: job.replyTo || ADMIN_EMAIL || undefined, subject: job.subject, html: job.html, text: job.text, attachments: job.attachments });
+      if (cfg.json) { sent.push({ to: job.to, subject: job.subject, kind: job.kind, text: job.text, attachments: (job.attachments || []).map((a) => a.filename) }); if (sent.length > 200) sent.shift(); void info; }
       log.run(job.to, job.subject, job.kind, 'sent', null, Date.now());
     } catch (e) {
       if (!job.retried) { job.retried = true; queue.push(job); await new Promise((r) => setTimeout(r, 3000)); continue; }
@@ -96,10 +96,10 @@ async function pump() {
 }
 
 /** Queue one email. Returns false (and sends nothing) when the address is missing or invalid. */
-function send({ to, subject, kind, replyTo, ...content }) {
+function send({ to, subject, kind, replyTo, attachments, ...content }) {
   if (!isEmail(to)) return false;
   const { html, text } = render(content);
-  queue.push({ to: to.trim(), subject, kind, replyTo, html, text });
+  queue.push({ to: to.trim(), subject, kind, replyTo, html, text, attachments });
   setImmediate(pump);
   return true;
 }

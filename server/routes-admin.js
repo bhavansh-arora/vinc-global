@@ -57,6 +57,7 @@ r.get('/stats', (_req, res) => {
     active_perm: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'permanent' AND role != 'admin'"),
     kyc_pending: one("SELECT COUNT(*) AS n FROM kyc_docs WHERE status = 'submitted'"),
     requests: one("SELECT COUNT(*) AS n FROM id_requests WHERE status = 'new'"),
+    agreements_to_sign: one("SELECT COUNT(*) AS n FROM agreements WHERE status = 'member_signed'"),
     unread: one("SELECT COUNT(*) AS n FROM messages WHERE sender = 'advisor' AND read_at IS NULL"),
     documents: one('SELECT COUNT(*) AS n FROM documents'),
     news: one('SELECT COUNT(*) AS n FROM news'),
@@ -138,6 +139,9 @@ r.post('/users/:id/approve', (req, res) => {
   grant(u, type, req.body.hours);
   const fresh = userRow(u.id);
   notify.approved(fresh);
+  // Ask them to sign their onboarding agreement, if it is ready and not yet signed.
+  const { agreement, created } = require('./agreements').ensureFor(fresh, undefined, 'Admin');
+  if (agreement && (created || agreement.status === 'pending')) notify.agreementReady(fresh, require('./agreements').KINDS[agreement.kind].title);
   res.json(A.publicUser(fresh));
 });
 
@@ -172,6 +176,8 @@ r.delete('/users/:id', (req, res) => {
     ...db.prepare('SELECT stored_name FROM kyc_docs WHERE user_id = ?').all(u.id),
     ...db.prepare('SELECT stored_name FROM certificates WHERE user_id = ?').all(u.id),
     ...db.prepare('SELECT stored_name FROM documents WHERE audience_user_id = ? AND stored_name IS NOT NULL').all(u.id),
+    ...db.prepare('SELECT member_sig AS stored_name FROM agreements WHERE user_id = ? AND member_sig IS NOT NULL').all(u.id),
+    ...db.prepare('SELECT executed_name AS stored_name FROM agreements WHERE user_id = ? AND executed_name IS NOT NULL').all(u.id),
   ];
   db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
   files.forEach((f) => up.removeStored(f.stored_name));

@@ -197,7 +197,47 @@ function idRequested(r) {
   });
 }
 
+// ---------------------------------------------------------------- agreements
+function agreementReady(u, title) {
+  return mail.send({
+    to: u.email, kind: 'agreement', subject: `Please sign your ${title}`,
+    title: `Your ${title} is ready to sign`, greeting: `Hello ${first(u)},`,
+    lines: [`Your ${title} with VINC DEEPTECH PRIVATE LIMITED is ready in VINC Global.`,
+      'Fill in your details, sign it on screen and you become a permanent member of the VINC circle once it is countersigned.'],
+    button: { text: `Review and sign`, path: '/advisor#agreements' },
+  });
+}
+function agreementSignedAdmin(u, ag, title) {
+  toAdmin({
+    kind: 'admin', subject: `${u.name || u.uid} signed the ${title}`, title: 'Ready for your countersignature',
+    lines: [`${u.name || u.uid} (${u.uid}) has signed the ${title}. Countersign it to execute the agreement and make them a permanent member.`],
+    facts: [['Reference', ag.ref], ['Signed at', ag.signedAt], ['Place', ag.member_place || '—']],
+    button: { text: 'Countersign', path: '/admin#agreements' },
+  });
+}
+function agreementExecuted(u, ag, title, pdfPath) {
+  const attachments = [{ filename: `${ag.ref} ${title}.pdf`, path: pdfPath }];
+  mail.send({
+    to: u.email, kind: 'agreement', subject: `Signed: your ${title} with VINC`, attachments,
+    title: 'Your agreement is signed', greeting: `Hello ${first(u)},`,
+    lines: [`Your ${title} has been signed by both parties. The executed copy is attached to this email and is always available in VINC Global.`],
+    facts: [['Reference', ag.ref]],
+    button: { text: 'Open my agreements', path: '/advisor#agreements' },
+  });
+  toAdmin({ kind: 'admin', subject: `Executed: ${title} with ${u.name || u.uid}`, title: 'Agreement executed', attachments,
+    facts: [['Member', `${u.name || '—'} (${u.uid})`], ['Reference', ag.ref]], button: { text: 'Open agreements', path: '/admin#agreements' } });
+}
+function agreementVoided(u, title, reason) {
+  return mail.send({
+    to: u.email, kind: 'agreement', subject: `Please sign your ${title} again`,
+    title: 'We need a fresh signature', greeting: `Hello ${first(u)},`,
+    lines: [`The VINC team has asked you to sign your ${title} again.`], quote: reason || null,
+    button: { text: 'Review and sign', path: '/advisor#agreements' },
+  });
+}
+
 module.exports = {
+  agreementReady, agreementSignedAdmin, agreementExecuted, agreementVoided,
   invitation, loginReady, approved, kycReviewed, investmentRecorded, certificateIssued,
   newsPublished, documentPublished, priceUpdated, founderReplied,
   adminSignup, adminNewMessage, adminKycUploaded, idRequested,

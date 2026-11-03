@@ -35,7 +35,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({ limit: '1mb' }));   // signatures arrive as small PNG images
 app.use(express.urlencoded({ extended: false, limit: '200kb' }));
 app.use(A.loadUser);
 
@@ -46,9 +46,11 @@ app.get('/healthz', (_req, res) => {
   catch { res.status(503).json({ ok: false }); }
 });
 app.use('/api/auth', require('./routes-auth').router);
+app.use('/api/member/agreements', require('./routes-agreements').member);
 app.use('/api/member', require('./routes-member').router);
 app.use('/api/chat', require('./routes-chat').member);
 app.use('/api/admin/chats', require('./routes-chat').admin);
+app.use('/api/admin/agreements', require('./routes-agreements').admin);
 app.use('/api/admin', require('./routes-admin').router);
 app.use('/api/files', require('./routes-files'));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));

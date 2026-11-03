@@ -16,6 +16,7 @@
   const REQUIRED_KYC = ['PAN card', 'Aadhaar card', 'Address proof', 'Bank proof / cancelled cheque', 'Photograph'];
   const VIEWS = {
     home: ['Home', 'Your VINC Global dashboard'],
+    agreements: ['Agreements', 'Sign your onboarding documents'],
     news: ['News', 'Updates from the VINC team'],
     vault: ['Data room', 'Confidential company documents · view only'],
     kyc: ['KYC documents', 'Upload and track your verification'],
@@ -175,6 +176,7 @@
   }
 
   function renderAll() {
+    paintAgreementBadge();
     renderHome();
     renderNews();
     renderVault();
@@ -184,7 +186,7 @@
   }
 
   function show() {
-    const name = (location.hash || '#home').slice(1);
+    const [name, sub] = (location.hash || '#home').slice(1).split('/');
     const view = VIEWS[name] ? name : 'home';
     document.querySelectorAll('.view').forEach((v) => { v.hidden = v.dataset.view !== view; });
     document.querySelectorAll('.side nav a').forEach((a) => { if (a.dataset.view === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -194,7 +196,22 @@
     document.title = `${VIEWS[view][0]} · VINC Global`;
     if (view === 'home') animateTimeline($('.view[data-view=home]'));
     if (view === 'portfolio') drawChart();
+    if (view === 'agreements') VG.memberAgreements.render($('.view[data-view=agreements]'), sub, { onChanged: reloadAfterSigning });
     window.scrollTo({ top: 0 });
+  }
+
+  // After signing: refresh everything quietly (the member may now be permanent).
+  async function reloadAfterSigning() {
+    try {
+      const fresh = await VG.api('/api/member/overview');
+      data = fresh; VG.me = fresh.user;
+      renderHome(); renderAccount(); paintAgreementBadge();
+    } catch { /* keep the current view */ }
+  }
+  function paintAgreementBadge() {
+    const b = $('#agr-badge');
+    const n = (data.agreements || []).filter((a) => a.status === 'pending').length;
+    b.textContent = n || ''; b.dataset.n = n;
   }
 
   // ---------------------------------------------------------------- access timeline
@@ -218,7 +235,7 @@
       <div class="access-top">
         <div><p class="label" style="margin:0 0 4px">${ended ? 'Preview ended' : `Temporary access · ${hours}-hour window`}</p>
           <h3 style="margin:0">${ended ? 'Your window has closed' : 'Your preview window is open'}</h3>
-          <p class="muted small" style="margin:4px 0 0">${ended ? 'Request access again to continue.' : 'Want to keep going after this? Ask the founder, or request access again when the window closes.'}</p></div>
+          <p class="muted small" style="margin:4px 0 0">${ended ? 'Request access again to continue.' : (data && (data.agreements || []).some((a) => a.status === 'pending') ? 'Sign your agreement in <a href="#agreements">Agreements</a> to become a permanent member.' : 'Want to keep going after this? Ask the founder, or request access again when the window closes.')}</p></div>
         ${ended ? '' : `<div class="countdown" aria-live="off"><div><b data-cd="h">--</b><span>hours</span></div><div><b data-cd="m">--</b><span>min</span></div><div><b data-cd="s">--</b><span>sec</span></div></div>`}
       </div>
       <div class="tl"><div class="tl-track"><div class="tl-fill"></div><div class="tl-now"><span class="tag">${ended ? 'Closed' : 'Now'}</span></div></div>
@@ -277,6 +294,7 @@
           <div class="btn-row"><span class="chip mono">${VG.esc(me.uid)}</span><span class="chip">${me.access_type === 'permanent' ? 'Permanent access' : 'Temporary access'}</span></div>
         </div>
       </div>
+      ${agreementBanner()}
       <div class="card">${timelineHtml(me, false)}</div>
       <div class="grid grid-4">
         <a class="card glowy stat stat-tile" style="--c:var(--teal);text-decoration:none" href="#portfolio"><span class="k">Share price</span><span class="v" id="home-price">${latest ? VG.money(latest.price, p.currency) : '—'}</span><span class="s">${latest ? 'as of ' + VG.date(latest.on_date) : 'Not published yet'}</span></a>
@@ -293,6 +311,25 @@
     VG.bubbles($('#hello-canvas'), { density: 0.6, dark: true });
     el.querySelectorAll('[data-count]').forEach((n) => VG.countUp(n, Number(n.dataset.count)));
     bindDocs(el);
+  }
+
+  function agreementBanner() {
+    const list = data.agreements || [];
+    const pending = list.find((a) => a.status === 'pending');
+    const waiting = list.find((a) => a.status === 'member_signed');
+    if (pending) {
+      return `<a class="card agr-banner" href="#agreements">
+        <span class="agr-ic">${VG.icon.file}</span>
+        <div style="flex:1;min-width:0"><p class="label" style="margin:0 0 2px">One step to permanent membership</p>
+          <h3 style="margin:0">Sign your ${VG.esc(pending.title)}</h3>
+          <p class="muted small" style="margin:2px 0 0">Fill in a few details and sign on screen. It takes about three minutes.</p></div>
+        <span class="btn btn-amber btn-sm">Review and sign ${VG.icon.arrow}</span></a>`;
+    }
+    if (waiting) {
+      return `<a class="card agr-banner waiting" href="#agreements"><span class="agr-ic">${VG.icon.clock}</span>
+        <div style="flex:1"><p class="label" style="margin:0 0 2px">Thank you for signing</p><h3 style="margin:0">VINC will countersign your ${VG.esc(waiting.title)} shortly</h3></div></a>`;
+    }
+    return '';
   }
 
   function emptyHtml(icon, text) {
