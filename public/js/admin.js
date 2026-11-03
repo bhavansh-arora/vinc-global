@@ -565,7 +565,7 @@
       const fd = new FormData(form);
       if (form.kind.value === 'link') fd.delete('file');
       await VG.busy(form.querySelector('[type=submit]'), async () => {
-        try { await VG.api('/api/admin/documents', { method: 'POST', form: fd }); VG.toast('Published to the data room.', 'ok'); form.reset(); form.hidden = true; $$('.choice', el).forEach((x) => x.setAttribute('aria-pressed', 'false')); paintDocs(); loadStats(); }
+        try { const r = await VG.api('/api/admin/documents', { method: 'POST', form: fd }); if (r.link && r.link.frameable === false) VG.toast(`Published. ${r.link.message} Members will see an “Open in new tab” button.`, 'bad'); else VG.toast(r.link && r.link.provider ? `Published. ${r.link.provider} link set to open inside the portal.` : 'Published to the data room.', 'ok'); form.reset(); form.hidden = true; $$('.choice', el).forEach((x) => x.setAttribute('aria-pressed', 'false')); paintDocs(); loadStats(); }
         catch (ex) { $('#doc-err').textContent = ex.message; }
       });
     });
@@ -580,7 +580,7 @@
       ${docs.map((d) => `<tr><td style="width:56px"><span class="kind ${d.kind}" style="width:34px;height:40px;font-size:.58rem;padding-bottom:4px">${{ pdf: 'PDF', excel: 'XLS', link: 'LINK' }[d.kind]}</span></td>
         <td><b>${VG.esc(d.title)}</b>${d.description ? `<div class="muted small">${VG.esc(d.description)}</div>` : ''}<div class="muted small">${d.kind === 'link' ? VG.esc(d.url) : VG.esc(d.original_name || '') + ' · ' + VG.size(d.size)}</div></td>
         <td>${VG.esc(CATS[d.category] || d.category)}</td>
-        <td>${d.audience_user_id ? `<span class="chip plum">${VG.esc(d.audience_name || d.audience_uid)}</span>` : '<span class="chip">All members</span>'}</td>
+        <td>${d.kind === 'link' && d.link_frameable === 0 ? '<span class="chip warn" title="This site does not allow being shown inside the portal">Opens in new tab</span> ' : ''}${d.audience_user_id ? `<span class="chip plum">${VG.esc(d.audience_name || d.audience_uid)}</span>` : '<span class="chip">All members</span>'}</td>
         <td class="small">${VG.date(d.created_at)}</td>
         <td><div class="actions"><button class="btn btn-soft btn-xs" data-dv="${d.id}">${VG.icon.eye.replace('<svg', '<svg width="14" height="14"')} View</button><button class="btn btn-danger btn-xs" data-dd="${d.id}">Delete</button></div></td></tr>`).join('')}
       </tbody></table></div>` : empty('vault', 'Nothing published yet. Choose PDF, Excel or link above.');

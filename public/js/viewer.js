@@ -79,21 +79,52 @@
       img.src = src;
       body.querySelector('.viewer-img').appendChild(watermark(wmText));
     } else if (kind === 'link') {
-      body.classList.add('frame');
-      body.innerHTML = '';
-      const f = document.createElement('iframe');
-      f.title = title;
-      f.referrerPolicy = 'no-referrer';
-      f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
-      f.src = url;
-      body.appendChild(f);
-      const note = document.createElement('div');
-      note.className = 'viewer-note';
-      let host = url; try { host = new URL(url).host; } catch { /* keep */ }
-      note.innerHTML = `<span>${VG.icon.link.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} ${VG.esc(host)} · Some sites refuse to be shown inside another page. If this stays blank, open it in a new tab.</span>
-        <a href="${VG.esc(url)}" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>`;
-      el.querySelector('.viewer-box').appendChild(note);
+      renderLink(opts, body, el).catch(() => linkCard(body, { url, host: hostOf(url), message: 'The link could not be opened here.' }, title));
     }
+  }
+
+  const hostOf = (u) => { try { return new URL(u).host.replace(/^www\./, ''); } catch { return u; } };
+
+  // Links: ask the server first. Sites that refuse to be shown inside another page get a clear card with an
+  // "open in a new tab" button; the rest open right here, using the embeddable form of the link when there is one.
+  async function renderLink(opts, body, el) {
+    const me = current;
+    let info = { url: opts.url, embed_url: opts.url, host: hostOf(opts.url), frameable: null };
+    if (opts.docId) { try { info = await VG.api(`/api/files/doc/${opts.docId}/link`); } catch { /* fall back to the raw link */ } }
+    if (current !== me) return;
+    if (info.frameable === false) return linkCard(body, info, opts.title);
+    body.classList.add('frame');
+    body.innerHTML = '';
+    const f = document.createElement('iframe');
+    f.title = opts.title || 'Linked page';
+    // Some players (YouTube) refuse to play without knowing which site embeds them.
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation');
+    f.setAttribute('allow', 'fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write');
+    f.allowFullscreen = true;
+    f.src = info.embed_url || info.url;
+    body.appendChild(f);
+    const note = document.createElement('div');
+    note.className = 'viewer-note';
+    note.innerHTML = `<span>${VG.icon.link.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} ${VG.esc(info.host || hostOf(info.url))}${info.frameable === null ? ' · If this stays blank, the site does not allow being shown here.' : ''}</span>
+      <a href="${VG.esc(info.url)}" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>`;
+    el.querySelector('.viewer-box').appendChild(note);
+  }
+
+  function linkCard(body, info, title) {
+    body.classList.remove('frame');
+    body.innerHTML = `<div class="link-card">
+        <span class="link-card-ic">${VG.icon.link}</span>
+        <p class="label" style="margin:0">${VG.esc(info.host || hostOf(info.url))}</p>
+        <h3>${VG.esc(title || 'Linked page')}</h3>
+        <p class="muted">${VG.esc(info.message || 'This website does not allow itself to be shown inside another page, so it opens in a new tab.')}</p>
+        <div class="btn-row" style="justify-content:center">
+          <a class="btn btn-primary" href="${VG.esc(info.url)}" target="_blank" rel="noopener noreferrer">${VG.icon.ext} Open ${VG.esc(info.host || 'the link')}</a>
+          <button type="button" class="btn btn-soft" data-copy>${VG.icon.copy} Copy link</button>
+        </div></div>`;
+    body.querySelector('[data-copy]').addEventListener('click', async (e) => {
+      try { await navigator.clipboard.writeText(info.url); e.currentTarget.textContent = 'Copied ✓'; } catch { /* ignore */ }
+    });
   }
 
   function close(immediate) {
@@ -248,7 +279,7 @@
   VG.openDocument = function (d) {
     if (d.kind === 'pdf') open({ kind: 'pdf', title: d.title, subtitle: d.description, src: `/api/files/doc/${d.id}/raw` });
     else if (d.kind === 'excel') open({ kind: 'excel', title: d.title, subtitle: d.description, sheetSrc: `/api/files/doc/${d.id}/sheet` });
-    else open({ kind: 'link', title: d.title, subtitle: d.description, url: d.url });
+    else open({ kind: 'link', title: d.title, subtitle: d.description, url: d.url, docId: d.id });
   };
   VG.openStored = function (title, mime, src, subtitle) {
     open({ kind: mime === 'application/pdf' ? 'pdf' : 'image', title, src, subtitle });

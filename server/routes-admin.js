@@ -209,12 +209,12 @@ r.delete('/news/:id', (req, res) => { db.prepare('DELETE FROM news WHERE id = ?'
 
 // ---------- documents (PDF, Excel or link; all view only) ----------
 r.get('/documents', (_req, res) => {
-  res.json(db.prepare(`SELECT d.id, d.title, d.description, d.category, d.kind, d.original_name, d.size, d.url, d.created_at, d.audience_user_id,
+  res.json(db.prepare(`SELECT d.id, d.title, d.description, d.category, d.kind, d.original_name, d.size, d.url, d.created_at, d.audience_user_id, d.link_frameable, d.link_reason,
                               u.uid AS audience_uid, u.name AS audience_name
                        FROM documents d LEFT JOIN users u ON u.id = d.audience_user_id ORDER BY d.created_at DESC`).all());
 });
 
-r.post('/documents', up.single((req) => (req.body.kind === 'excel' ? 'excel' : 'pdf')), (req, res) => {
+r.post('/documents', up.single((req) => (req.body.kind === 'excel' ? 'excel' : 'pdf')), async (req, res) => {
   const kind = ['pdf', 'excel', 'link'].includes(req.body.kind) ? req.body.kind : null;
   const cleanup = () => req.file && up.removeStored(req.file.filename);
   const title = str(req.body.title, 200);
@@ -238,7 +238,15 @@ r.post('/documents', up.single((req) => (req.body.kind === 'excel' ? 'excel' : '
       req.file ? req.file.filename : null, req.file ? req.file.originalname.slice(0, 200) : null,
       req.file ? req.file.vgMime : null, req.file ? req.file.size : null, url, audience, Date.now());
   notify.documentPublished(db.prepare('SELECT * FROM documents WHERE id = ?').get(info.lastInsertRowid));
-  res.json({ id: Number(info.lastInsertRowid) });
+  let link = null;
+  if (kind === 'link') {
+    // Find out now whether the site can be shown inside the portal, so the admin knows straight away.
+    link = await require('./links').check(url);
+    db.prepare('UPDATE documents SET link_embed = ?, link_frameable = ?, link_reason = ?, link_checked_at = ? WHERE id = ?')
+      .run(link.embed_url, link.frameable == null ? null : (link.frameable ? 1 : 0), link.reason, Date.now(), info.lastInsertRowid);
+    link.message = link.reason ? require('./links').REASONS[link.reason] : null;
+  }
+  res.json({ id: Number(info.lastInsertRowid), link });
 });
 
 r.delete('/documents/:id', (req, res) => {

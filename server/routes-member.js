@@ -11,7 +11,7 @@ r.use(A.requireMember);
 const KYC_TYPES = ['PAN card', 'Aadhaar card', 'Passport', 'Address proof', 'Bank proof / cancelled cheque', 'Photograph', 'Other'];
 
 function docsFor(userId) {
-  return db.prepare(`SELECT id, title, description, category, kind, original_name, size, url, created_at,
+  return db.prepare(`SELECT id, title, description, category, kind, original_name, size, url, created_at, link_frameable,
                             CASE WHEN audience_user_id IS NULL THEN 0 ELSE 1 END AS personal
                      FROM documents WHERE audience_user_id IS NULL OR audience_user_id = ?
                      ORDER BY created_at DESC`).all(userId);

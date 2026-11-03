@@ -93,6 +93,24 @@ r.get('/doc/:id/sheet', async (req, res) => {
   }
 });
 
+// Links: the address to show (embeddable form) and whether the site allows being shown inside the portal.
+r.get('/doc/:id/link', async (req, res) => {
+  const d = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
+  if (!d || d.kind !== 'link' || !canSeeDocument(req, d)) return res.status(404).json({ error: 'Not found.' });
+  const links = require('./links');
+  let info = { embed_url: d.link_embed, frameable: d.link_frameable == null ? null : !!d.link_frameable, reason: d.link_reason };
+  if (!d.link_checked_at || Date.now() - d.link_checked_at > 24 * 3600e3 || !d.link_embed) {
+    const c = await links.check(d.url);
+    info = { embed_url: c.embed_url, frameable: c.frameable, reason: c.reason };
+    db.prepare('UPDATE documents SET link_embed = ?, link_frameable = ?, link_reason = ?, link_checked_at = ? WHERE id = ?')
+      .run(c.embed_url, c.frameable == null ? null : (c.frameable ? 1 : 0), c.reason, Date.now(), d.id);
+  }
+  if (!isAdmin(req)) A.logAccess(req.user.id, 'viewed_document', d.title);
+  let host = d.url; try { host = new URL(d.url).host; } catch { /* keep */ }
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.json({ url: d.url, host, ...info, message: info.reason ? links.REASONS[info.reason] : null });
+});
+
 r.get('/kyc/:id/raw', (req, res) => {
   const d = db.prepare('SELECT * FROM kyc_docs WHERE id = ?').get(req.params.id);
   if (!d || (!isAdmin(req) && d.user_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });

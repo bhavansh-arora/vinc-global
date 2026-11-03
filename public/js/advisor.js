@@ -358,7 +358,7 @@
     return `<button type="button" class="doc" data-doc="${d.id}" style="--i:${i}">
       <span class="kind ${kind}">${label}</span>
       <span class="dm"><b>${VG.esc(d.title)}</b>${d.description ? `<p>${VG.esc(d.description)}</p>` : ''}
-        <span class="meta"><span class="chip">${VG.esc(CATS[d.category] || 'General')}</span>${d.personal ? '<span class="chip plum">Just for you</span>' : ''}<span class="muted small">${VG.date(d.created_at)}</span></span></span>
+        <span class="meta"><span class="chip">${VG.esc(CATS[d.category] || 'General')}</span>${d.personal ? '<span class="chip plum">Just for you</span>' : ''}${d.kind === 'link' && d.link_frameable === 0 ? '<span class="chip">Opens in new tab</span>' : ''}<span class="muted small">${VG.date(d.created_at)}</span></span></span>
     </button>`;
   }
   function bindDocs(root) {

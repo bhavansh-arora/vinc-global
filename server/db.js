@@ -229,6 +229,11 @@ addColumn('agreement_templates', 'required', 'required INTEGER NOT NULL DEFAULT 
 addColumn('agreements', 'mandatory', 'mandatory INTEGER NOT NULL DEFAULT 1');
 db.exec('CREATE INDEX IF NOT EXISTS idx_agreements_user ON agreements(user_id, kind)');
 addColumn('users', 'email_updates', 'email_updates INTEGER NOT NULL DEFAULT 1');
+// Links: can the site be shown inside the portal? (see server/links.js)
+addColumn('documents', 'link_embed', 'link_embed TEXT');
+addColumn('documents', 'link_frameable', 'link_frameable INTEGER');
+addColumn('documents', 'link_reason', 'link_reason TEXT');
+addColumn('documents', 'link_checked_at', 'link_checked_at INTEGER');
 
 const DEFAULT_SETTINGS = {
   company_name: 'VINC',
