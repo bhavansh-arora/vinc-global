@@ -197,16 +197,97 @@ section { padding: clamp(64px, 9vw, 112px) 0; position: relative; }
 @media (max-width: 900px) { .auth-brand-sm { display: inline-flex; } }
 
 /* Request a VINC ID */
-.request-wrap { align-items: start; }
+.request-wrap { align-items: center; }
 .request-card { padding: clamp(20px, 3vw, 30px); }
 .rq-steps { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 12px; }
 .rq-steps li { display: flex; gap: 14px; align-items: flex-start; }
 .rq-steps li span { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--amber-soft); color: var(--amber-ink); font: 700 1rem var(--display); }
 .rq-steps li b { display: block; }
 .rq-steps li div { color: var(--ink-2); font-size: var(--t-small); }
-.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .request-done { text-align: center; padding: 18px 6px; }
 .request-done .tick { width: 88px; height: 88px; margin: 0 auto 12px; display: block; }
 .request-done .tick circle { fill: none; stroke: var(--teal); stroke-width: 5; stroke-dasharray: 290; stroke-dashoffset: 290; animation: lp-draw-c .9s var(--ease-out) forwards; }
 .request-done .tick path { fill: none; stroke: var(--amber); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 70; stroke-dashoffset: 70; animation: lp-draw-c .5s var(--ease-out) .7s forwards; }
 @keyframes lp-draw-c { to { stroke-dashoffset: 0; } }
+
+/* ================= Section 2 · the two platforms: 3D unfold, tilt, light sheen and a travelling border ================= */
+@property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.platforms { perspective: 1400px; }
+.platform {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  background: radial-gradient(560px circle at var(--mx, 50%) var(--my, -20%), color-mix(in srgb, var(--f) 11%, transparent), transparent 45%), var(--card);
+  transition: transform .7s var(--ease-out), box-shadow .5s var(--ease-out);
+}
+.platform:hover { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-6px); box-shadow: var(--shadow-lg); }
+.platform.tilting { transition: transform .12s linear, box-shadow .5s var(--ease-out); }
+.platform::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; z-index: 2;
+  background: conic-gradient(from var(--ang), transparent 0 55%, color-mix(in srgb, var(--f) 80%, transparent) 72%, var(--band-accent) 82%, transparent 94%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity .5s var(--ease-out); animation: pl-orbit 3.6s linear infinite; }
+.platform:hover::before, .platform.in.glint::before { opacity: 1; }
+@keyframes pl-orbit { to { --ang: 360deg; } }
+.platform.reveal { opacity: 0; translate: 0 60px; rotate: x 22deg; transform-origin: 50% 100%;
+  transition: opacity .9s var(--ease-out) var(--rd, 0ms), translate 1.1s var(--ease-out) var(--rd, 0ms), rotate 1.3s var(--ease-out) var(--rd, 0ms), transform .7s var(--ease-out), box-shadow .5s var(--ease-out); }
+.platform.reveal.in { opacity: 1; translate: 0 0; rotate: x 0deg; }
+.platform .badge-ic svg { transition: scale .5s var(--ease-spring); }
+.platform.lab .badge-ic svg { animation: pl-bob 3.2s var(--ease-in-out) infinite; transform-origin: 50% 90%; }
+.platform.lms .badge-ic svg { animation: pl-page 4s var(--ease-in-out) infinite; }
+@keyframes pl-bob { 0%, 100% { rotate: -6deg; } 50% { rotate: 6deg; } }
+@keyframes pl-page { 0%, 70%, 100% { scale: 1 1; } 80% { scale: -1 1; } 90% { scale: 1 1; } }
+.platform:hover .badge-ic svg { scale: 1.15; }
+.platform .facts div { transition: transform .5s var(--ease-out), border-color .4s ease, background-color .4s ease; }
+.platform .facts div:hover { transform: translateY(-3px); border-color: var(--f); background: color-mix(in srgb, var(--f) 7%, var(--card-2)); }
+.platform.reveal .facts div, .platform.reveal .tags .chip { opacity: 0; translate: 0 14px; transition: opacity .6s var(--ease-out), translate .7s var(--ease-out); }
+.platform.reveal.in .facts div, .platform.reveal.in .tags .chip { opacity: 1; translate: 0 0; }
+.platform.reveal.in .facts div:nth-child(1) { transition-delay: calc(var(--rd, 0ms) + 380ms); } .platform.reveal.in .facts div:nth-child(2) { transition-delay: calc(var(--rd, 0ms) + 460ms); }
+.platform.reveal.in .facts div:nth-child(3) { transition-delay: calc(var(--rd, 0ms) + 540ms); } .platform.reveal.in .facts div:nth-child(4) { transition-delay: calc(var(--rd, 0ms) + 620ms); }
+.platform.reveal.in .tags .chip { transition-delay: calc(var(--rd, 0ms) + 720ms); }
+
+/* ================= Section 4 · portal features: cascading entrance, a spotlight that follows the cursor across the grid,
+   and icons that draw themselves ================= */
+.feature { position: relative; isolation: isolate; }
+.feature::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: radial-gradient(240px circle at var(--mx, -999px) var(--my, -999px), var(--f), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity .5s var(--ease-out); }
+.feature::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+  background: radial-gradient(320px circle at var(--mx, -999px) var(--my, -999px), color-mix(in srgb, var(--f) 10%, transparent), transparent 65%);
+  opacity: 0; transition: opacity .5s var(--ease-out); }
+.features.lit .feature::before, .features.lit .feature::after { opacity: 1; }
+.feature.reveal { opacity: 0; translate: 0 34px; scale: .94; filter: blur(8px);
+  transition: opacity .8s var(--ease-out) var(--rd, 0ms), translate .9s var(--ease-out) var(--rd, 0ms), scale .9s var(--ease-out) var(--rd, 0ms), filter .8s var(--ease-out) var(--rd, 0ms),
+    transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) ease; }
+.feature.reveal.in { opacity: 1; translate: 0 0; scale: 1; filter: blur(0); }
+.feature.armed .fi svg * { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.feature.armed.draw .fi svg * { stroke-dashoffset: 0; transition: stroke-dashoffset 1.5s var(--ease-in-out) calc(var(--rd, 0ms) + 250ms); }
+.feature.armed.drawn .fi svg * { stroke-dasharray: none; transition: none; }
+.feature .fi { position: relative; }
+.feature .fi::after { content: ""; position: absolute; inset: -6px; border-radius: 20px; border: 1.5px solid var(--f); opacity: 0; scale: .8; }
+.feature.draw .fi::after { animation: ft-ring 1.4s var(--ease-out) calc(var(--rd, 0ms) + 1.5s) 1; }
+@keyframes ft-ring { 0% { opacity: .8; scale: .85; } 100% { opacity: 0; scale: 1.35; } }
+
+/* ================= Section 5 · onboarding: a comet runs along the line and lights each step as it passes ================= */
+.steps-wrap { position: relative; }
+.comet { position: absolute; top: 28.5px; left: 6%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; z-index: 2; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #fff 0 30%, var(--band-accent) 60%);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--band-accent) 30%, transparent), 0 0 28px 10px color-mix(in srgb, var(--band-accent) 55%, transparent); }
+.comet::before { content: ""; position: absolute; right: 50%; top: 50%; width: 120px; height: 4px; translate: 0 -50%; border-radius: 4px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--band-accent) 85%, transparent)); }
+.steps li .n { z-index: 3; transition: background-color .5s var(--ease-out), color .5s var(--ease-out), scale .6s var(--ease-spring), box-shadow .6s var(--ease-out); }
+.steps.armed li h3, .steps.armed li p { opacity: .35; translate: 0 8px; transition: opacity .6s var(--ease-out), translate .7s var(--ease-out); }
+.steps.armed li .n { scale: .86; }
+.steps li.lit .n { background: var(--f); color: #fff; scale: 1.12; box-shadow: 0 0 0 7px color-mix(in srgb, var(--f) 18%, transparent), var(--shadow); animation: st-pop .9s var(--ease-out); }
+.steps.armed li.lit h3, .steps.armed li.lit p { opacity: 1; translate: 0 0; }
+.steps li.lit .n::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--f); animation: st-wave 1.2s var(--ease-out) forwards; }
+@keyframes st-pop { 40% { scale: 1.3; } }
+@keyframes st-wave { from { opacity: .9; scale: 1; } to { opacity: 0; scale: 1.9; } }
+.steps.done li .n { scale: 1; }
+.steps li { transition: transform .5s var(--ease-out); }
+.steps li:hover { transform: translateY(-4px); }
+@media (max-width: 860px) { .comet { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .platform.reveal, .feature.reveal { opacity: 1; translate: none; rotate: none; scale: none; filter: none; }
+  .platform::before { animation: none; }
+}
+.steps.armed::before { transition: transform var(--line-dur, 1.6s) linear; }

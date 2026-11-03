@@ -2,6 +2,120 @@
   'use strict';
   const VG = window.VG;
 
+  const reduce = () => VG.reducedMotion();
+  const finePointer = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const onceVisible = (els, fn, threshold = 0.35) => {
+    const ob = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) { ob.unobserve(en.target); fn(en.target); } }), { threshold });
+    els.forEach((el) => ob.observe(el));
+  };
+
+  // Section 2: the cards unfold in 3D, tilt toward the cursor with a moving sheen, a light runs around
+  // the border once as they arrive, and the figures count up.
+  function sectionPlatforms() {
+    const cards = [...document.querySelectorAll('.platform')];
+    onceVisible(document.querySelectorAll('.facts [data-count]'), (el) => {
+      const to = Number(el.dataset.count), pre = el.dataset.prefix || '';
+      setTimeout(() => VG.countUp(el, to, { dur: 1600, format: (v) => pre + Math.round(v).toLocaleString('en-IN') }), 450);
+    }, 0.6);
+    if (reduce()) return;
+    onceVisible(cards, (card) => {
+      setTimeout(() => card.classList.add('glint'), 900);
+      setTimeout(() => card.classList.remove('glint'), 4500);
+    }, 0.3);
+    if (!finePointer()) return;
+    cards.forEach((card) => {
+      card.addEventListener('pointermove', (e) => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+        card.classList.add('tilting');
+        card.style.setProperty('--ry', (px * 7).toFixed(2) + 'deg');
+        card.style.setProperty('--rx', (-py * 5).toFixed(2) + 'deg');
+        card.style.setProperty('--mx', (e.clientX - r.left).toFixed(0) + 'px');
+        card.style.setProperty('--my', (e.clientY - r.top).toFixed(0) + 'px');
+      });
+      card.addEventListener('pointerleave', () => {
+        card.classList.remove('tilting');
+        ['--rx', '--ry', '--mx', '--my'].forEach((k) => card.style.removeProperty(k));
+      });
+    });
+  }
+
+  // Section 4: the cards cascade in out of a blur, each icon draws itself line by line, and a spotlight
+  // follows the cursor across the whole grid, lighting the borders of neighbouring cards too.
+  function sectionFeatures() {
+    const grid = document.querySelector('.features');
+    if (!grid || reduce()) return;
+    const cards = [...grid.querySelectorAll('.feature')];
+    cards.forEach((c) => {
+      c.classList.add('armed');
+      c.querySelectorAll('.fi svg path, .fi svg circle, .fi svg rect, .fi svg line, .fi svg polyline').forEach((el) => el.setAttribute('pathLength', '1'));
+    });
+    onceVisible(cards, (c) => {
+      c.classList.add('draw');
+      const delay = parseInt(getComputedStyle(c).getPropertyValue('--rd'), 10) || 0;
+      setTimeout(() => c.classList.add('drawn'), delay + 1900);
+    }, 0.4);
+    if (!finePointer()) return;
+    grid.addEventListener('pointermove', (e) => {
+      grid.classList.add('lit');
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        c.style.setProperty('--mx', (e.clientX - r.left).toFixed(0) + 'px');
+        c.style.setProperty('--my', (e.clientY - r.top).toFixed(0) + 'px');
+      }
+    });
+    grid.addEventListener('pointerleave', () => grid.classList.remove('lit'));
+  }
+
+  // Section 5: a comet travels along the onboarding line and lights each step as it passes.
+  // It plays every time the section scrolls into view.
+  function sectionSteps() {
+    const wrap = document.getElementById('steps-wrap');
+    const list = document.getElementById('steps');
+    if (!wrap || !list) return;
+    const items = [...list.children];
+    const comet = wrap.querySelector('.comet');
+    if (reduce()) { list.style.setProperty('--sp', 1); return; }
+    list.classList.add('armed');
+    const DUR = 2600;
+    let timers = [], playing = false;
+    const clear = () => { timers.forEach(clearTimeout); timers = []; };
+    const reset = () => {
+      clear(); playing = false;
+      items.forEach((li) => li.classList.remove('lit'));
+      list.classList.remove('done');
+      list.style.setProperty('--line-dur', '0s');
+      list.style.setProperty('--sp', 0);
+    };
+    const play = () => {
+      if (playing) return;
+      reset();
+      playing = true;
+      const wide = matchMedia('(min-width: 861px)').matches;
+      if (wide) {
+        void getComputedStyle(list, '::before').transform;   // apply the reset before starting again
+        requestAnimationFrame(() => {
+          list.style.setProperty('--line-dur', DUR + 'ms');
+          list.style.setProperty('--sp', 1);
+          comet.animate([{ left: '6%', opacity: 0 }, { opacity: 1, offset: 0.05 }, { left: '94%', opacity: 1, offset: 0.95 }, { left: '94%', opacity: 0 }], { duration: DUR, easing: 'linear' });
+        });
+        items.forEach((li, i) => {
+          const centre = ((i + 0.5) / items.length) * 100;
+          timers.push(setTimeout(() => li.classList.add('lit'), ((centre - 6) / 88) * DUR));
+        });
+      } else {
+        list.style.setProperty('--sp', 1);
+        items.forEach((li, i) => timers.push(setTimeout(() => li.classList.add('lit'), 200 + i * 420)));
+      }
+      timers.push(setTimeout(() => { list.classList.add('done'); playing = false; }, DUR + 500));
+    };
+    const ob = new IntersectionObserver(([en]) => {
+      if (en.isIntersecting && en.intersectionRatio >= 0.55) play();
+      else if (!en.isIntersecting) reset();
+    }, { threshold: [0, 0.55] });
+    ob.observe(wrap);
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     // Mobile menu
     const menuBtn = document.getElementById('menu-btn');
@@ -60,10 +174,12 @@
       if (!en.isIntersecting) return;
       io.unobserve(en.target);
       if (en.target.classList.contains('count')) VG.countUp(en.target, Number(en.target.dataset.to), { dur: 1400 });
-      if (en.target.id === 'steps') setTimeout(() => en.target.style.setProperty('--sp', 1), 300);
     }), { threshold: 0.4 });
     document.querySelectorAll('.count').forEach((el) => io.observe(el));
-    io.observe(document.getElementById('steps'));
+
+    sectionPlatforms();
+    sectionFeatures();
+    sectionSteps();
 
     // Request a VINC ID
     const rq = document.getElementById('request-form');

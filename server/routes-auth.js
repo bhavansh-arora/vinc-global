@@ -85,13 +85,12 @@ r.post('/request-renewal', A.requireAuth, (req, res) => {
   res.json({ user: A.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(u.id)) });
 });
 
-// Public "Request a VINC ID" form. Spam guards: a hidden honeypot field, a minimum time on the page,
-// a per-IP limit, and one open request per email address.
+// Public "Request a VINC ID" form. Spam guards: the form must have been open for a few seconds (sent by
+// the page's script, so scripted posts without it are dropped), a per-IP limit, and one open request per email.
 const reqHits = new Map();
 r.post('/request-id', (req, res) => {
   const b = req.body || {};
-  if (b.website) return res.json({ ok: true });                       // honeypot: bots fill every field
-  if (Number(b.elapsed) > 0 && Number(b.elapsed) < 2500) return res.json({ ok: true });
+  if (!(Number(b.elapsed) >= 2500)) return res.json({ ok: true });   // looks automated: accept quietly, store nothing
   const now = Date.now();
   const hits = (reqHits.get(req.ip) || []).filter((t) => t > now - 3600000);
   if (hits.length >= 5) return res.status(429).json({ error: 'Too many requests from your connection. Please try again later.' });

@@ -61,15 +61,47 @@ vendor('/vendor/pdfjs/cmaps', 'pdfjs-dist/cmaps');
 vendor('/vendor/pdfjs/standard_fonts', 'pdfjs-dist/standard_fonts');
 vendor('/vendor/chartjs', 'chart.js/dist');
 
+// Asset version: a hash of every CSS/JS/image file. Pages link to /css/x.css?v=<hash>, so after an update
+// browsers fetch the new files instead of reusing ones cached from the previous version.
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+function assetVersion() {
+  const h = crypto.createHash('sha1');
+  for (const dir of ['css', 'js', 'img']) {
+    const full = path.join(PUB, dir);
+    if (!fs.existsSync(full)) continue;
+    for (const f of fs.readdirSync(full).sort()) h.update(f).update(fs.readFileSync(path.join(full, f)));
+  }
+  return h.digest('hex').slice(0, 10);
+}
+const ASSET_V = assetVersion();
+const pageCache = new Map();
+function page(file) {
+  if (!pageCache.has(file) || process.env.NODE_ENV !== 'production') {
+    const html = fs.readFileSync(path.join(PUB, file), 'utf8')
+      .replace(/(src|href)="(\/(?:css|js|img)\/[^"?#]+)"/g, `$1="$2?v=${ASSET_V}"`);
+    pageCache.set(file, html);
+  }
+  return pageCache.get(file);
+}
+
 // Pages with clean URLs.
 const pages = { '/': 'index.html', '/login': 'login.html', '/signup': 'signup.html', '/advisor': 'advisor.html', '/admin': 'admin.html' };
 for (const [route, file] of Object.entries(pages)) {
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(path.join(PUB, file));
+    res.type('html').send(page(file));
   });
 }
-app.use(express.static(PUB, { extensions: ['html'], maxAge: '1h' }));
+app.get(/^\/(index|login|signup|advisor|admin)\.html$/, (req, res) => res.redirect(301, req.path === '/index.html' ? '/' : req.path.replace(/\.html$/, '')));
+// Versioned files (?v=…) never change, so browsers may keep them; anything else is re-checked each time.
+app.use(express.static(PUB, {
+  extensions: ['html'],
+  setHeaders: (res, filePath) => {
+    const versioned = res.req && res.req.query && res.req.query.v;
+    res.setHeader('Cache-Control', /\.html$/.test(filePath) ? 'no-cache' : versioned ? 'public, max-age=31536000, immutable' : 'no-cache');
+  },
+}));
 app.use((_req, res) => res.status(404).sendFile(path.join(PUB, 'index.html')));
 
 // eslint-disable-next-line no-unused-vars

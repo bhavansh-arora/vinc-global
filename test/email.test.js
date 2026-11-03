@@ -81,9 +81,9 @@ test('ID, approval, updates and requests all send the right emails', async () =>
   assert.deepEqual(m.map((x) => x.kind), ['investment']);
 
   // Public "Request a VINC ID": acknowledgement + admin notice; then the admin turns it into an ID
-  const bad = await visitor('POST', '/api/auth/request-id', { name: 'X', email: 'not-an-email' });
+  const bad = await visitor('POST', '/api/auth/request-id', { name: 'X', email: 'not-an-email', elapsed: 9000 });
   assert.equal(bad.status, 400);
-  const bot = await visitor('POST', '/api/auth/request-id', { name: 'Bot', email: 'bot@example.com', website: 'http://spam' });
+  const bot = await visitor('POST', '/api/auth/request-id', { name: 'Bot', email: 'bot@example.com', elapsed: 300 });
   assert.equal(bot.status, 200);
   const ok = await visitor('POST', '/api/auth/request-id', { name: 'Neha Gupta', email: 'neha@example.com', organisation: 'Gupta Family Office', role: 'investor', message: 'Keen to support', elapsed: 9000 });
   assert.equal(ok.status, 200);
@@ -91,7 +91,7 @@ test('ID, approval, updates and requests all send the right emails', async () =>
   m = mails();
   assert.deepEqual(m.map((x) => x.to).sort(), ['founder@example.com', 'neha@example.com']);
   const reqs = await admin('GET', '/api/admin/requests');
-  assert.equal(reqs.body.length, 1, 'the honeypot request was not stored');
+  assert.equal(reqs.body.length, 1, 'the too-fast request was not stored');
   assert.equal((await admin('GET', '/api/admin/stats')).body.requests, 1);
   const made = await admin('POST', `/api/admin/requests/${reqs.body[0].id}/approve`, {});
   assert.match(made.body.uid, /^VG-INV-/);
