@@ -127,12 +127,46 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS email_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  to_addr TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  kind TEXT,
+  status TEXT NOT NULL,           -- sent | failed | skipped (email not set up)
+  error TEXT,
+  at INTEGER NOT NULL
+);
+-- "Request a VINC ID" form on the public site.
+CREATE TABLE IF NOT EXISTS id_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  organisation TEXT,
+  role TEXT NOT NULL DEFAULT 'advisor',
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','approved','dismissed')),
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ip TEXT,
+  created_at INTEGER NOT NULL,
+  handled_at INTEGER
+);
+`);
+
+// Columns added after the first release: add them to existing databases.
+function addColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+addColumn('users', 'email_updates', 'email_updates INTEGER NOT NULL DEFAULT 1');
+
 const DEFAULT_SETTINGS = {
   company_name: 'VINC',
   founder_name: 'the Founder',
   currency: '₹',
   temp_access_hours: '72',
-  contact_email: 'info@vinc-lab.com',
+  contact_email: 'info@vinc-global.com',
 };
 
 function seed() {

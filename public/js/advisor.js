@@ -568,6 +568,12 @@
           <h3 style="margin-top:22px">Recent activity</h3>
           <ul class="log">${data.log.map((l) => `<li><b>${VG.esc(labels[l.action] || l.action)}</b>${l.detail ? ' · ' + VG.esc(l.detail) : ''}<time>${VG.dateTime(l.at)}</time></li>`).join('')}</ul>
         </div>
+        <div class="grid" style="gap:18px;align-content:start">
+        <div class="card"><h3>Email notifications</h3>
+          <p class="muted small" style="margin-top:-4px">We always email you about your access, KYC, investments and certificates${me.email ? ` at <b>${VG.esc(me.email)}</b>` : ''}.</p>
+          <label class="switch"><input type="checkbox" id="email-updates" ${me.email_updates !== false ? 'checked' : ''}><span class="track" aria-hidden="true"></span>
+            <span><b>Email me about updates</b><br><span class="muted small">News, new documents, share price changes and replies from the founder.</span></span></label>
+        </div>
         <form class="card" id="pwd-form"><h3>Change password</h3>
           <label class="field"><span>Current password</span><div class="pwd-wrap"><input class="input" type="password" name="current" autocomplete="current-password" required><button type="button"></button></div></label>
           <label class="field"><span>New password <span class="hint">8+ characters, letters and numbers</span></span><div class="pwd-wrap"><input class="input" type="password" name="next" autocomplete="new-password" required><button type="button"></button></div></label>
@@ -575,7 +581,15 @@
           <p class="form-error" id="pwd-err"></p>
           <button class="btn btn-primary" type="submit">Update password</button>
         </form>
+        </div>
       </div>`;
+    $('#email-updates').addEventListener('change', async (e) => {
+      try {
+        const u = await VG.api('/api/member/prefs', { method: 'PATCH', body: { email_updates: e.target.checked } });
+        data.user.email_updates = u.email_updates;
+        VG.toast(u.email_updates ? 'You will get update emails.' : 'Update emails turned off.', 'ok');
+      } catch (ex) { e.target.checked = !e.target.checked; VG.toast(ex.message, 'bad'); }
+    });
     VG.bindPasswords($('.view[data-view=account]'));
     $('#pwd-form').addEventListener('submit', async (e) => {
       e.preventDefault();

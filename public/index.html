@@ -28,6 +28,7 @@
       <a href="#portal">The portal</a>
       <a href="#onboarding">Onboarding</a>
       <a href="#news" id="nav-news" hidden>News</a>
+      <a href="#request">Request an ID</a>
       <div class="nav-auth">
         <a class="btn btn-ghost btn-sm" href="/signup">Activate ID</a>
         <a class="btn btn-primary btn-sm" href="/login">Log in</a>
@@ -68,16 +69,11 @@
           <div class="ring" aria-hidden="true"></div>
           <div class="ring r2" aria-hidden="true"></div>
           <div class="core" aria-hidden="true">
-            <svg class="core-mark" viewBox="0 0 128 128">
-              <defs>
-                <clipPath id="cm-c"><rect x="0" y="16" width="112" height="110"/></clipPath>
-                <clipPath id="cm-flask"><path d="M56 52 L95 52 L73.5 92 Z"/></clipPath>
-              </defs>
-              <g transform="translate(14 8)">
-                <g fill="var(--amber)"><polygon points="4,24 40,24 84,116 56,116"/><polygon points="62,116 80,116 104,71 96,58"/><polygon points="62,116 80,116 140,4 122,4" clip-path="url(#cm-c)"/></g>
-                <g clip-path="url(#cm-flask)"><path class="liquid" d="M-30 60 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V100 H-30 Z"/></g>
-                <g class="bub"><circle cx="69" cy="47" r="4"/><circle cx="80" cy="36" r="3"/><circle cx="72" cy="27" r="2.2"/><circle cx="76" cy="52" r="2.6"/></g>
-              </g>
+            <svg class="core-mark" viewBox="-2 6 136 128">
+              <defs><clipPath id="cm-flask"><path d="M56 52 L95 52 L73.5 92 Z"/></clipPath></defs>
+              <g fill="var(--amber)"><polygon points="4,24 40,24 84,116 56,116"/><polygon points="62,116 80,116 129.3,24 111.3,24"/></g>
+              <g clip-path="url(#cm-flask)"><path class="liquid" d="M-30 60 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V100 H-30 Z"/></g>
+              <g class="bub"><circle cx="69" cy="47" r="4"/><circle cx="80" cy="36" r="3"/><circle cx="72" cy="27" r="2.2"/><circle cx="76" cy="52" r="2.6"/></g>
             </svg>
           </div>
           <a class="planet p-lab" href="https://vinc-lab.com" target="_blank" rel="noopener" data-orbit="0" data-radius="0.44"><span class="pi">
@@ -186,7 +182,7 @@
         <p>Every account is created by the VINC team. Nobody gets in without an ID from us and an approval.</p>
       </div>
       <ol class="steps reveal" id="steps">
-        <li style="--f:var(--olive)"><span class="n">1</span><h3>Get your VINC ID</h3><p>The VINC team generates a personal ID for you, like <span class="mono">VG-ADV-7K3P9Q</span>.</p></li>
+        <li style="--f:var(--olive)"><span class="n">1</span><h3>Get your VINC ID</h3><p>Ask for one below. The VINC team emails you a personal ID, like <span class="mono">VG-ADV-7K3P9Q</span>.</p></li>
         <li style="--f:var(--amber)"><span class="n">2</span><h3>Sign up</h3><p>Enter your ID, your details and a password of your choice.</p></li>
         <li style="--f:var(--rust)"><span class="n">3</span><h3>Approval</h3><p>The team approves a 72-hour preview or permanent access.</p></li>
         <li style="--f:var(--plum)"><span class="n">4</span><h3>Step inside</h3><p>Data room, KYC, your portfolio and a direct line to the founder.</p></li>
@@ -204,13 +200,50 @@
     </div>
   </section>
 
+  <!-- Request a VINC ID -->
+  <section id="request" aria-labelledby="rq-title">
+    <div class="wrap two-col request-wrap">
+      <div class="reveal">
+        <p class="label">Ask for a VINC ID</p>
+        <h2 id="rq-title">Would you like to back VINC?</h2>
+        <p class="lead">Tell us a little about yourself. The team reads every request, and once it's approved you'll get your personal VINC ID by email, with a link to sign up.</p>
+        <ol class="rq-steps">
+          <li><span>1</span><div><b>Send this short form</b>It takes under a minute.</div></li>
+          <li><span>2</span><div><b>The team reviews it</b>Usually within a day or two.</div></li>
+          <li><span>3</span><div><b>Your VINC ID arrives by email</b>Sign up with it and step inside.</div></li>
+        </ol>
+      </div>
+      <div class="card request-card reveal" style="--rd:120ms">
+        <form id="request-form" novalidate>
+          <div class="seg" id="rq-role" role="group" aria-label="I'm interested as" style="margin-bottom:16px">
+            <button type="button" aria-pressed="true" data-value="advisor">As an advisor</button>
+            <button type="button" aria-pressed="false" data-value="investor">As an investor</button>
+          </div>
+          <div class="form-row">
+            <label class="field"><span>Full name</span><input class="input" name="name" autocomplete="name" required maxlength="120"></label>
+            <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" required maxlength="160"></label>
+          </div>
+          <div class="form-row">
+            <label class="field"><span>Phone <span class="hint">optional</span></span><input class="input" type="tel" name="phone" autocomplete="tel" maxlength="40"></label>
+            <label class="field"><span>Organisation <span class="hint">optional</span></span><input class="input" name="organisation" autocomplete="organization" maxlength="160"></label>
+          </div>
+          <label class="field"><span>Anything you'd like us to know? <span class="hint">optional</span></span><textarea class="input" name="message" maxlength="1500" style="min-height:90px"></textarea></label>
+          <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <p class="form-error" id="rq-err" role="alert"></p>
+          <button class="btn btn-primary" type="submit" style="width:100%">Request my VINC ID <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+          <p class="muted small" style="margin:10px 0 0;text-align:center">We only use these details to get in touch about VINC.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
   <!-- CTA -->
   <section class="band-dark cta" aria-labelledby="cta-title">
     <span class="cta-orb a" aria-hidden="true"></span><span class="cta-orb b" aria-hidden="true"></span>
     <div class="wrap reveal">
       <p class="label">Advisors and investors</p>
       <h2 id="cta-title">Already have a VINC ID? Step inside.</h2>
-      <p class="lead">Not yet? Write to <a href="mailto:info@vinc-lab.com" style="color:var(--band-accent)">info@vinc-lab.com</a> and the team will set you up.</p>
+      <p class="lead">Not yet? <a href="#request" style="color:var(--band-accent)">Ask for a VINC ID</a> or write to <a href="mailto:info@vinc-global.com" style="color:var(--band-accent)">info@vinc-global.com</a>.</p>
       <div class="btn-row">
         <a class="btn btn-amber" href="/login">Log in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
         <a class="btn btn-ghost" href="/signup">Activate my ID</a>
@@ -226,7 +259,7 @@
       <div class="foot-links">
         <a href="https://vinc-lab.com" target="_blank" rel="noopener">vinc-lab.com</a>
         <a href="https://lms.vinc-lab.com" target="_blank" rel="noopener">lms.vinc-lab.com</a>
-        <a href="mailto:info@vinc-lab.com">info@vinc-lab.com</a>
+        <a href="mailto:info@vinc-global.com">info@vinc-global.com</a>
         <a href="/login">Log in</a>
       </div>
     </div>

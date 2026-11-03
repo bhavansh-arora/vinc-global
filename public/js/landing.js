@@ -65,6 +65,32 @@
     document.querySelectorAll('.count').forEach((el) => io.observe(el));
     io.observe(document.getElementById('steps'));
 
+    // Request a VINC ID
+    const rq = document.getElementById('request-form');
+    if (rq) {
+      const opened = Date.now();
+      let role = 'advisor';
+      VG.seg(document.getElementById('rq-role'), (v) => { role = v; });
+      rq.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const err = document.getElementById('rq-err');
+        err.textContent = '';
+        const f = Object.fromEntries(new FormData(rq));
+        if (!f.name.trim()) { err.textContent = 'Please enter your name.'; return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) { err.textContent = 'Please enter a valid email address.'; return; }
+        await VG.busy(rq.querySelector('[type=submit]'), async () => {
+          try {
+            await VG.api('/api/auth/request-id', { body: { ...f, role, elapsed: Date.now() - opened } });
+            const card = rq.parentElement;
+            card.innerHTML = `<div class="request-done"><svg class="tick" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="45"/><path d="M30 52l13 13 27-29"/></svg>
+              <p class="label">Request received</p><h3 style="font-size:1.6rem">Thank you, ${VG.esc(f.name.trim().split(/\s+/)[0])}</h3>
+              <p class="muted">We've sent a confirmation to <b>${VG.esc(f.email.trim())}</b>. Once the team approves your request, your VINC ID will arrive in the same inbox.</p></div>`;
+            card.animate([{ opacity: 0, translate: '0 14px' }, { opacity: 1, translate: '0 0' }], { duration: 600, easing: 'cubic-bezier(.22,1,.36,1)' });
+          } catch (ex) { err.textContent = ex.message; }
+        });
+      });
+    }
+
     // Public news
     VG.api('/api/auth/news').then((items) => {
       if (!items || !items.length) return;

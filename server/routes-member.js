@@ -3,6 +3,7 @@ const express = require('express');
 const { db, getSettings } = require('./db');
 const A = require('./auth');
 const up = require('./uploads');
+const notify = require('./notify');
 
 const r = express.Router();
 r.use(A.requireMember);
@@ -78,7 +79,14 @@ r.post('/kyc', up.single('kyc'), (req, res) => {
   db.prepare('INSERT INTO kyc_docs (user_id, doc_type, stored_name, original_name, mime, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(req.user.id, type, req.file.filename, req.file.originalname.slice(0, 200), req.file.vgMime, req.file.size, Date.now());
   A.logAccess(req.user.id, 'kyc_uploaded', type);
+  notify.adminKycUploaded(req.user, type);
   res.json({ ok: true });
+});
+
+// "Email me about updates" (news, documents, share price, founder replies).
+r.patch('/prefs', (req, res) => {
+  db.prepare('UPDATE users SET email_updates = ? WHERE id = ?').run(req.body.email_updates ? 1 : 0, req.user.id);
+  res.json(A.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id)));
 });
 
 r.delete('/kyc/:id', (req, res) => {

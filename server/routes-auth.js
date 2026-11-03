@@ -3,6 +3,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, getSettings } = require('./db');
 const A = require('./auth');
+const notify = require('./notify');
+const mail = require('./mailer');
 
 const r = express.Router();
 
@@ -63,6 +65,7 @@ r.post('/signup', A.rateLimit, (req, res) => {
   db.prepare(`UPDATE users SET name = ?, email = ?, phone = ?, organisation = ?, password_hash = ?, status = 'pending', signup_at = ?, renewal_requested = 0 WHERE id = ?`)
     .run(name, email, phone, organisation, bcrypt.hashSync(password, 10), Date.now(), u.id);
   A.logAccess(u.id, 'signup');
+  notify.adminSignup(db.prepare('SELECT * FROM users WHERE id = ?').get(u.id), false);
   A.clearRateLimit(req);
   A.createSession(res, u.id);
   res.json({ user: A.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(u.id)) });
@@ -78,7 +81,33 @@ r.post('/request-renewal', A.requireAuth, (req, res) => {
   if (state !== 'expired') return res.status(400).json({ error: 'Your access does not need renewing right now.' });
   db.prepare("UPDATE users SET status = 'pending', renewal_requested = 1 WHERE id = ?").run(u.id);
   A.logAccess(u.id, 'renewal_requested');
+  notify.adminSignup(u, true);
   res.json({ user: A.publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(u.id)) });
+});
+
+// Public "Request a VINC ID" form. Spam guards: a hidden honeypot field, a minimum time on the page,
+// a per-IP limit, and one open request per email address.
+const reqHits = new Map();
+r.post('/request-id', (req, res) => {
+  const b = req.body || {};
+  if (b.website) return res.json({ ok: true });                       // honeypot: bots fill every field
+  if (Number(b.elapsed) > 0 && Number(b.elapsed) < 2500) return res.json({ ok: true });
+  const now = Date.now();
+  const hits = (reqHits.get(req.ip) || []).filter((t) => t > now - 3600000);
+  if (hits.length >= 5) return res.status(429).json({ error: 'Too many requests from your connection. Please try again later.' });
+  const name = str(b.name, 120), email = str(b.email, 160);
+  if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+  if (!mail.isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+  hits.push(now); reqHits.set(req.ip, hits);
+  const open = db.prepare("SELECT id FROM id_requests WHERE lower(email) = lower(?) AND status = 'new'").get(email);
+  const existing = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND role != 'admin'").get(email);
+  if (open || existing) return res.json({ ok: true });               // already with the team; don't reveal more
+  const row = { name, email, phone: str(b.phone, 40) || null, organisation: str(b.organisation, 160) || null,
+    role: b.role === 'investor' ? 'investor' : 'advisor', message: str(b.message, 1500) || null };
+  db.prepare('INSERT INTO id_requests (name, email, phone, organisation, role, message, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(row.name, row.email, row.phone, row.organisation, row.role, row.message, req.ip, now);
+  notify.idRequested(row);
+  res.json({ ok: true });
 });
 
 r.post('/password', A.requireAuth, (req, res) => {

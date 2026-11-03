@@ -6,6 +6,8 @@ const { db, getSettings, tx } = require('./db');
 const A = require('./auth');
 const up = require('./uploads');
 const { passwordProblem, str } = require('./routes-auth');
+const notify = require('./notify');
+const mail = require('./mailer');
 
 const r = express.Router();
 r.use(A.requireAdmin);
@@ -54,6 +56,7 @@ r.get('/stats', (_req, res) => {
     active_temp: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'temporary' AND access_expires_at > ?", now),
     active_perm: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'permanent' AND role != 'admin'"),
     kyc_pending: one("SELECT COUNT(*) AS n FROM kyc_docs WHERE status = 'submitted'"),
+    requests: one("SELECT COUNT(*) AS n FROM id_requests WHERE status = 'new'"),
     unread: one("SELECT COUNT(*) AS n FROM messages WHERE sender = 'advisor' AND read_at IS NULL"),
     documents: one('SELECT COUNT(*) AS n FROM documents'),
     news: one('SELECT COUNT(*) AS n FROM news'),
@@ -95,7 +98,9 @@ r.post('/users', (req, res) => {
   const u = userRow(info.lastInsertRowid);
   A.logAccess(u.id, 'id_generated', role);
   if (access) grant(u, access, req.body.hours);
-  res.json(A.publicUser(userRow(u.id)));
+  const fresh = userRow(u.id);
+  const emailed = fresh.email ? (password ? notify.loginReady(fresh) : notify.invitation(fresh)) : false;
+  res.json({ ...A.publicUser(fresh), emailed, email_configured: mail.status().configured });
 });
 
 r.get('/users/:id', (req, res) => {
@@ -118,12 +123,22 @@ r.patch('/users/:id', (req, res) => {
   res.json(A.publicUser(userRow(u.id)));
 });
 
+// Email the VINC ID again (or the "login ready" note when a password was set for them).
+r.post('/users/:id/invite', (req, res) => {
+  const u = memberOr404(req, res); if (!u) return;
+  if (!mail.isEmail(u.email || '')) return res.status(400).json({ error: 'Add an email address for this member first.' });
+  const ok = u.status === 'invited' ? notify.invitation(u) : notify.loginReady(u);
+  res.json({ ok, configured: mail.status().configured });
+});
+
 r.post('/users/:id/approve', (req, res) => {
   const u = memberOr404(req, res); if (!u) return;
   if (!u.password_hash) return res.status(400).json({ error: 'This member has not signed up yet.' });
   const type = req.body.type === 'permanent' ? 'permanent' : 'temporary';
   grant(u, type, req.body.hours);
-  res.json(A.publicUser(userRow(u.id)));
+  const fresh = userRow(u.id);
+  notify.approved(fresh);
+  res.json(A.publicUser(fresh));
 });
 
 r.post('/users/:id/reject', (req, res) => {
@@ -171,7 +186,9 @@ r.post('/news', (req, res) => {
   const vis = req.body.visibility === 'public' ? 'public' : 'members';
   const info = db.prepare('INSERT INTO news (title, body, tag, visibility, pinned, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(title, body, str(req.body.tag, 40) || null, vis, req.body.pinned ? 1 : 0, Date.now());
-  res.json(db.prepare('SELECT * FROM news WHERE id = ?').get(info.lastInsertRowid));
+  const row = db.prepare('SELECT * FROM news WHERE id = ?').get(info.lastInsertRowid);
+  if (req.body.notify !== false) notify.newsPublished(row);
+  res.json(row);
 });
 r.patch('/news/:id', (req, res) => {
   const n = db.prepare('SELECT * FROM news WHERE id = ?').get(req.params.id);
@@ -212,6 +229,7 @@ r.post('/documents', up.single((req) => (req.body.kind === 'excel' ? 'excel' : '
     .run(title, str(req.body.description, 1000) || null, category, kind,
       req.file ? req.file.filename : null, req.file ? req.file.originalname.slice(0, 200) : null,
       req.file ? req.file.vgMime : null, req.file ? req.file.size : null, url, audience, Date.now());
+  notify.documentPublished(db.prepare('SELECT * FROM documents WHERE id = ?').get(info.lastInsertRowid));
   res.json({ id: Number(info.lastInsertRowid) });
 });
 
@@ -235,6 +253,7 @@ r.post('/kyc/:id/review', (req, res) => {
   if (!status) return res.status(400).json({ error: 'Choose verified or rejected.' });
   db.prepare('UPDATE kyc_docs SET status = ?, remark = ?, reviewed_at = ? WHERE id = ?').run(status, str(req.body.remark, 300) || null, Date.now(), k.id);
   A.logAccess(k.user_id, 'kyc_' + status, k.doc_type);
+  if (status !== 'submitted') notify.kycReviewed(userRow(k.user_id), { ...k, status, remark: str(req.body.remark, 300) || null });
   res.json({ ok: true });
 });
 
@@ -256,6 +275,7 @@ r.post('/investments', (req, res) => {
   db.prepare('INSERT INTO investments (user_id, invested_on, amount, shares, round, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .run(userId, on, amount, shares, str(req.body.round, 80) || null, str(req.body.note, 300) || null, Date.now());
   A.logAccess(userId, 'investment_recorded', `${amount}`);
+  notify.investmentRecorded(userRow(userId), { invested_on: on, amount, shares, round: str(req.body.round, 80) || null });
   res.json({ ok: true });
 });
 r.delete('/investments/:id', (req, res) => { db.prepare('DELETE FROM investments WHERE id = ?').run(req.params.id); res.json({ ok: true }); });
@@ -268,6 +288,7 @@ r.post('/certificates', up.single('certificate'), (req, res) => {
   db.prepare('INSERT INTO certificates (user_id, title, certificate_no, stored_name, original_name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(userId, str(req.body.title, 200) || 'Share certificate', str(req.body.certificate_no, 60) || null, req.file.filename, req.file.originalname.slice(0, 200), req.file.vgMime, req.file.size, Date.now());
   A.logAccess(userId, 'certificate_issued', str(req.body.certificate_no, 60) || null);
+  notify.certificateIssued(userRow(userId), { title: str(req.body.title, 200) || 'Share certificate', certificate_no: str(req.body.certificate_no, 60) || null });
   res.json({ ok: true });
 });
 r.delete('/certificates/:id', (req, res) => {
@@ -286,12 +307,54 @@ r.post('/prices', (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) return res.status(400).json({ error: 'Choose a date.' });
   if (!(price > 0)) return res.status(400).json({ error: 'Price must be more than zero.' });
   db.prepare('INSERT INTO share_prices (on_date, price, kind, note, created_at) VALUES (?, ?, ?, ?, ?)').run(on, price, kind, str(req.body.note, 200) || null, Date.now());
+  if (kind === 'actual') notify.priceUpdated({ on_date: on, price, note: str(req.body.note, 200) || null });
   res.json({ ok: true });
 });
 r.delete('/prices/:id', (req, res) => { db.prepare('DELETE FROM share_prices WHERE id = ?').run(req.params.id); res.json({ ok: true }); });
 
 // ---------- settings ----------
 const EDITABLE = ['company_name', 'founder_name', 'currency', 'temp_access_hours', 'contact_email'];
+// ---------- VINC ID requests from the public site ----------
+r.get('/requests', (_req, res) => {
+  res.json(db.prepare(`SELECT r.id, r.name, r.email, r.phone, r.organisation, r.role, r.message, r.status, r.created_at, r.handled_at, r.user_id, u.uid
+                       FROM id_requests r LEFT JOIN users u ON u.id = r.user_id ORDER BY (r.status = 'new') DESC, r.created_at DESC LIMIT 300`).all());
+});
+r.post('/requests/:id/approve', (req, res) => {
+  const q = db.prepare('SELECT * FROM id_requests WHERE id = ?').get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Not found.' });
+  if (q.status !== 'new') return res.status(400).json({ error: 'This request has already been handled.' });
+  if (db.prepare("SELECT 1 FROM users WHERE lower(email) = lower(?) AND role != 'admin'").get(q.email)) return res.status(409).json({ error: 'A member with this email already exists.' });
+  const role = ['advisor', 'investor'].includes(req.body.role) ? req.body.role : q.role;
+  const now = Date.now();
+  const user = tx(() => {
+    const info = db.prepare("INSERT INTO users (uid, role, name, email, phone, organisation, notes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'invited', ?)")
+      .run(newUid(role), role, q.name, q.email, q.phone, q.organisation, q.message ? `Request: ${q.message}`.slice(0, 500) : null, now);
+    db.prepare("UPDATE id_requests SET status = 'approved', user_id = ?, handled_at = ? WHERE id = ?").run(info.lastInsertRowid, now, q.id);
+    return userRow(info.lastInsertRowid);
+  });
+  A.logAccess(user.id, 'id_generated', `${role} (from website request)`);
+  const emailed = notify.invitation(user);
+  res.json({ ...A.publicUser(user), emailed, email_configured: mail.status().configured });
+});
+r.post('/requests/:id/dismiss', (req, res) => {
+  db.prepare("UPDATE id_requests SET status = 'dismissed', handled_at = ? WHERE id = ? AND status = 'new'").run(Date.now(), req.params.id);
+  res.json({ ok: true });
+});
+
+// ---------- email ----------
+r.get('/email', (_req, res) => {
+  res.json({ ...mail.status(), log: db.prepare('SELECT to_addr, subject, kind, status, error, at FROM email_log ORDER BY id DESC LIMIT 40').all() });
+});
+r.post('/email/test', async (req, res) => {
+  const to = str(req.body.to, 160) || mail.ADMIN_EMAIL;
+  if (!mail.isEmail(to)) return res.status(400).json({ error: 'Enter an email address to send the test to.' });
+  const check = await mail.verify();
+  if (!check.ok) return res.status(502).json({ error: 'Could not connect to the mail server: ' + check.error });
+  mail.send({ to, kind: 'test', subject: 'VINC Global test email', title: 'Email is working',
+    lines: ['This is a test from VINC Global. If you can read this, members will receive their VINC IDs, approvals and updates by email.'] });
+  res.json({ ok: true, to });
+});
+
 r.get('/settings', (_req, res) => res.json(getSettings()));
 r.put('/settings', (req, res) => {
   const set = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');

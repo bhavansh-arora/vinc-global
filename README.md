@@ -7,8 +7,9 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 
 **Public landing page (`/`)**: an introduction to the VINC Learning Centre and the Kaushal Bodh LMS, a "why now" timeline, a tour of the portal, the four onboarding steps, and public news.
 
-**Admin (`/login` → Admin, default `admin` / `Vinc@2026`)** has all rights:
+**Admin (log in at `/login` with VINC ID `admin` and password `Vinc@2026`; there is one login form for everyone)** has all rights:
 - **Members & IDs**: generate IDs for advisors (`VG-ADV-…`) or investors (`VG-INV-…`), with an optional custom ID, starting password and pre-approval. Copy an invitation message. Edit, revoke, reset or delete any member.
+- **ID requests**: people who filled in **Request a VINC ID** on the website. **Generate ID & email it** creates their ID and emails it with a sign-up link.
 - **Approvals**: approve a **temporary** window (72 hours by default; you can set custom hours) or **permanent** access, or reject.
 - **Documents**: choose **Upload PDF**, **Upload Excel** or **Add a link**. Each item opens view-only in a panel on the same page, with a **Close** button at the top. You can share an item with all members or with one member.
 - **News**: publish to members only, or to the public landing page as well. Posts can be pinned.
@@ -28,6 +29,21 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **My investment**: total invested, shares, the live share price (checked every 30 seconds), a chart of price history and projection, current and projected value, and downloadable share certificates.
 - **Joining VINC animation**: right after login, people walk up in a queue and step through a glowing VINC doorway. The advisor's own figure, tagged "You", is last in line, and when it walks in there's a burst of confetti and the dashboard rises into place card by card. It plays once per login and can be skipped (button or Esc). People who prefer reduced motion don't see it. On the waiting-for-approval screen, the advisor stands at a closed door that swings open and lets them in when the team approves.
 - **Calm ambience**: a soft generated soundscape (Web Audio: slow pads, gentle bells, a faint breath of air), toggled with the equaliser button. Browsers allow sound only after a click, so the portal remembers the choice and starts on the first click.
+
+## Email
+
+The portal emails from `info@vinc-global.com` through one.com's SMTP server. The settings live in a `.env` file on the server (see `.env.example`); the password is never stored in the repo.
+
+| When | Who gets it |
+|---|---|
+| A VINC ID is generated with an email address, or a website request is approved | The member: their VINC ID and a sign-up link |
+| The admin approves access (temporary or permanent) | The member |
+| News, a new document, a new share price, a reply from the founder | Active members (each member can turn these off under **Account**) |
+| KYC verified or rejected, investment recorded, certificate issued | The member |
+| Sign-up, renewal request, new question, KYC upload, website ID request | The admin (`ADMIN_EMAIL`) |
+| Someone submits **Request a VINC ID** | That person: "we received your request" |
+
+**Settings → Email** shows whether email is connected, sends a test email and lists the last 40 emails with their status. Reply emails are limited to one every 15 minutes per member.
 
 ## Run it
 

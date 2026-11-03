@@ -7,6 +7,9 @@ services:
     image: vinc-global:latest
     container_name: vinc-global
     restart: unless-stopped
+    env_file:                                         # SMTP settings live here, on the server only
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       TRUST_PROXY: "1"

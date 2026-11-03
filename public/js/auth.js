@@ -21,16 +21,8 @@
   function initLogin(form) {
     const err = document.getElementById('err');
     const uid = document.getElementById('uid');
-    const label = document.getElementById('uid-label');
     const params = new URLSearchParams(location.search);
     if (params.get('uid')) uid.value = params.get('uid');
-    VG.seg(document.getElementById('who'), (v) => {
-      label.textContent = v === 'admin' ? 'Admin ID' : 'VINC ID';
-      uid.placeholder = v === 'admin' ? 'admin' : 'VG-ADV-XXXXXX';
-      uid.classList.toggle('mono', v !== 'admin');
-      document.getElementById('alt').hidden = v === 'admin';
-      uid.focus();
-    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       err.textContent = '';

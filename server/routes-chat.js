@@ -3,6 +3,7 @@
 const express = require('express');
 const { db } = require('./db');
 const A = require('./auth');
+const notify = require('./notify');
 
 const member = express.Router();
 const admin = express.Router();
@@ -32,6 +33,7 @@ member.post('/', (req, res) => {
   const body = cleanBody(req.body.body);
   if (!body) return res.status(400).json({ error: 'Type a message first.' });
   const info = db.prepare("INSERT INTO messages (advisor_id, sender, body, created_at) VALUES (?, 'advisor', ?, ?)").run(req.user.id, body, Date.now());
+  notify.adminNewMessage(req.user, body);
   res.json(db.prepare('SELECT id, sender, body, created_at, read_at FROM messages WHERE id = ?').get(info.lastInsertRowid));
 });
 
@@ -72,6 +74,7 @@ admin.post('/:advisorId', (req, res) => {
   const body = cleanBody(req.body.body);
   if (!body) return res.status(400).json({ error: 'Type a message first.' });
   const info = db.prepare("INSERT INTO messages (advisor_id, sender, body, created_at) VALUES (?, 'founder', ?, ?)").run(id, body, Date.now());
+  notify.founderReplied(id, body);
   res.json(db.prepare('SELECT id, sender, body, created_at, read_at FROM messages WHERE id = ?').get(info.lastInsertRowid));
 });
 

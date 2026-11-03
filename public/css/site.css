@@ -195,3 +195,18 @@ section { padding: clamp(64px, 9vw, 112px) 0; position: relative; }
 @keyframes lp-draw-c { to { stroke-dashoffset: 0; } }
 .auth-brand-sm { display: none; }
 @media (max-width: 900px) { .auth-brand-sm { display: inline-flex; } }
+
+/* Request a VINC ID */
+.request-wrap { align-items: start; }
+.request-card { padding: clamp(20px, 3vw, 30px); }
+.rq-steps { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 12px; }
+.rq-steps li { display: flex; gap: 14px; align-items: flex-start; }
+.rq-steps li span { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--amber-soft); color: var(--amber-ink); font: 700 1rem var(--display); }
+.rq-steps li b { display: block; }
+.rq-steps li div { color: var(--ink-2); font-size: var(--t-small); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.request-done { text-align: center; padding: 18px 6px; }
+.request-done .tick { width: 88px; height: 88px; margin: 0 auto 12px; display: block; }
+.request-done .tick circle { fill: none; stroke: var(--teal); stroke-width: 5; stroke-dasharray: 290; stroke-dashoffset: 290; animation: lp-draw-c .9s var(--ease-out) forwards; }
+.request-done .tick path { fill: none; stroke: var(--amber); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 70; stroke-dashoffset: 70; animation: lp-draw-c .5s var(--ease-out) .7s forwards; }
+@keyframes lp-draw-c { to { stroke-dashoffset: 0; } }

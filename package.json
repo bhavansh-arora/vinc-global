@@ -20,6 +20,7 @@
     "express": "^5.3.0",
     "helmet": "^8.3.0",
     "multer": "^2.5.0",
+    "nodemailer": "10.1.7",
     "pdfjs-dist": "^5.7.284"
   }
 }

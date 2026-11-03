@@ -60,6 +60,7 @@ function publicUser(u) {
     organisation: u.organisation, status: u.status, access_type: u.access_type,
     access_expires_at: u.access_expires_at, approved_at: u.approved_at, signup_at: u.signup_at,
     renewal_requested: !!u.renewal_requested, last_login_at: u.last_login_at, created_at: u.created_at,
+    email_updates: u.email_updates === undefined ? true : !!u.email_updates,
     state: accessState(u),
   };
 }

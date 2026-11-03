@@ -17,6 +17,7 @@
   const VIEWS = {
     overview: ['Overview', 'The founder’s desk'],
     approvals: ['Approvals', 'New sign-ups and renewal requests'],
+    requests: ['ID requests', 'People who asked for a VINC ID on the website'],
     members: ['Members & IDs', 'Generate IDs for advisors and investors'],
     documents: ['Documents', 'Publish PDFs, Excel sheets and links · view only for members'],
     news: ['News', 'Publish updates to members or the public site'],
@@ -71,13 +72,14 @@
     }
     VG.riseIn($('.view:not([hidden])'));
     setInterval(async () => {
-      const before = stats ? stats.pending + stats.unread + stats.kyc_pending : 0;
+      const before = stats ? stats.pending + stats.unread + stats.kyc_pending + stats.requests : 0;
       await loadStats();
-      const after = stats.pending + stats.unread + stats.kyc_pending;
+      const after = stats.pending + stats.unread + stats.kyc_pending + stats.requests;
       if (after > before) {
         VG.toast('Something new needs your attention.', 'ok');
         if (current === 'overview') renderOverview();
         if (current === 'approvals') { await loadUsers(); renderApprovals(); }
+        if (current === 'requests') renderRequests();
       }
     }, 20000);
   });
@@ -89,7 +91,7 @@
   }
 
   const RENDER = {
-    overview: renderOverview, approvals: renderApprovals, members: renderMembers, documents: renderDocuments,
+    overview: renderOverview, approvals: renderApprovals, requests: renderRequests, members: renderMembers, documents: renderDocuments,
     news: renderNews, kyc: renderKyc, investments: renderInvestments, prices: renderPrices, chats: renderChats, settings: renderSettings,
   };
 
@@ -139,7 +141,7 @@
     el.innerHTML = `
       <div class="hello"><canvas id="hello-canvas" aria-hidden="true"></canvas>
         <div class="hello-row"><div><p class="label">Admin · all rights</p><h2>${VG.greeting()}, founder</h2>
-          <p>${s.pending ? `${s.pending} ${s.pending === 1 ? 'person is' : 'people are'} waiting for approval.` : 'Nobody is waiting for approval.'} ${s.unread ? `${s.unread} unread message${s.unread === 1 ? '' : 's'} in Ask the Founder.` : ''}</p></div>
+          <p>${s.pending ? `${s.pending} ${s.pending === 1 ? 'person is' : 'people are'} waiting for approval.` : 'Nobody is waiting for approval.'} ${s.unread ? `${s.unread} unread message${s.unread === 1 ? '' : 's'} in Ask the Founder.` : ''} ${s.requests ? `${s.requests} new VINC ID request${s.requests === 1 ? '' : 's'} from the website.` : ''}</p></div>
           <div class="btn-row"><a class="btn btn-amber btn-sm" href="#members">${VG.icon.plus} Generate an ID</a><a class="btn btn-ghost btn-sm" style="border-color:var(--on-band);color:var(--on-band)" href="#documents">${VG.icon.upload} Publish a document</a></div></div>
       </div>
       <div class="grid grid-4">
@@ -219,6 +221,48 @@
   }
   async function refresh(after) { await Promise.all([loadUsers(), loadStats()]); after && after(); }
 
+  // ================================================================ ID requests (website form)
+  async function renderRequests() {
+    const el = viewEl('requests');
+    let list;
+    try { list = await VG.api('/api/admin/requests'); } catch (e) { return fail(e); }
+    const open = list.filter((r) => r.status === 'new'), done = list.filter((r) => r.status !== 'new');
+    el.innerHTML = `<div class="section-title"><div><h2>VINC ID requests</h2><p>From the "Request a VINC ID" form on the website. Generating an ID emails it to them with a sign-up link.</p></div></div>
+      ${open.length ? `<div class="grid grid-2">${open.map((r, i) => `
+        <article class="card glowy" style="animation:vg-rise .6s var(--ease-out) ${i * 60}ms backwards">
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px"><span class="avatar">${VG.initials(r.name)}</span>
+            <div style="min-width:0;flex:1"><b style="font-family:var(--display);font-size:1.15rem">${VG.esc(r.name)}</b><div class="muted small">${VG.ago(r.created_at)}</div></div>
+            <span class="chip ${r.role === 'investor' ? 'teal' : 'warn'}">${roleLabel(r.role)}</span></div>
+          <div class="small" style="display:grid;gap:2px;margin-bottom:12px;color:var(--ink-2)">
+            <a href="mailto:${VG.esc(r.email)}" style="color:var(--teal);font-weight:700">${VG.esc(r.email)}</a>
+            ${r.phone ? `<span>${VG.esc(r.phone)}</span>` : ''}${r.organisation ? `<span>${VG.esc(r.organisation)}</span>` : ''}</div>
+          ${r.message ? `<p class="small" style="margin:0 0 14px;padding:10px 12px;border-left:3px solid var(--amber);background:var(--card-2);border-radius:8px;white-space:pre-wrap">${VG.esc(r.message)}</p>` : ''}
+          <div class="btn-row">
+            <select class="input" data-role="${r.id}" style="min-height:36px;width:auto"><option value="advisor" ${r.role === 'advisor' ? 'selected' : ''}>Advisor</option><option value="investor" ${r.role === 'investor' ? 'selected' : ''}>Investor</option></select>
+            <button class="btn btn-teal btn-sm" data-rq-ok="${r.id}">${VG.icon.spark} Generate ID &amp; email it</button>
+            <button class="btn btn-soft btn-sm" data-rq-no="${r.id}">Dismiss</button>
+          </div>
+        </article>`).join('')}</div>` : `<div class="card">${empty('inbox', 'No new requests. They appear here when someone fills in the form on the website.')}</div>`}
+      <div class="card"><h3>Handled</h3>
+        ${done.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Name</th><th>Email</th><th>Outcome</th><th>When</th></tr></thead><tbody>
+          ${done.map((r) => `<tr><td><b>${VG.esc(r.name)}</b>${r.organisation ? `<div class="muted small">${VG.esc(r.organisation)}</div>` : ''}</td><td>${VG.esc(r.email)}</td>
+            <td>${r.status === 'approved' ? `<span class="chip ok">ID ${VG.esc(r.uid || 'created')}</span>` : '<span class="chip">Dismissed</span>'}</td><td class="small">${VG.date(r.handled_at)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="muted" style="margin:0">Nothing yet.</p>'}</div>`;
+    $$('[data-rq-ok]', el).forEach((b) => b.addEventListener('click', () => VG.busy(b, async () => {
+      const role = $(`[data-role="${b.dataset.rqOk}"]`, el).value;
+      try {
+        const u = await VG.api(`/api/admin/requests/${b.dataset.rqOk}/approve`, { body: { role } });
+        VG.toast(u.email_configured ? `${u.uid} created and emailed to ${u.email}.` : `${u.uid} created. Email is not set up on the server yet, so share the ID yourself.`, u.email_configured ? 'ok' : 'bad');
+        await Promise.all([loadUsers(), loadStats()]);
+        renderRequests();
+      } catch (e) { fail(e); }
+    })));
+    $$('[data-rq-no]', el).forEach((b) => b.addEventListener('click', async () => {
+      if (!(await VG.confirm('They will not get a VINC ID. Nothing is emailed to them.', { title: 'Dismiss this request?', ok: 'Dismiss' }))) return;
+      try { await VG.api(`/api/admin/requests/${b.dataset.rqNo}/dismiss`, { method: 'POST' }); await loadStats(); renderRequests(); } catch (e) { fail(e); }
+    }));
+  }
+
   // ================================================================ members
   function renderMembers() {
     const el = viewEl('members');
@@ -228,7 +272,7 @@
           <div class="seg" id="gen-role" style="margin-bottom:14px"><button type="button" aria-pressed="true" data-value="advisor">Advisor</button><button type="button" aria-pressed="false" data-value="investor">Investor</button></div>
           <div class="form-row">
             <label class="field"><span>Name <span class="hint">optional</span></span><input class="input" name="name"></label>
-            <label class="field"><span>Email <span class="hint">optional</span></span><input class="input" type="email" name="email"></label>
+            <label class="field"><span>Email <span class="hint">we email the ID here</span></span><input class="input" type="email" name="email"></label>
           </div>
           <details style="margin-bottom:14px"><summary class="small" style="cursor:pointer;font-weight:700">More options: custom ID, starting password, pre-approval</summary>
             <div style="padding-top:12px">
@@ -276,7 +320,8 @@
       : `Hello${u.name ? ' ' + u.name.split(' ')[0] : ''}, welcome to VINC Global, the portal for VINC's advisors and investors.\nYour VINC ID: ${u.uid}\nActivate it here: ${link}`;
     $('#gen-result').innerHTML = `<div class="id-card"><p class="label">New ${roleLabel(u.role).toLowerCase()} ID</p>
       <div class="uid">${VG.esc(u.uid)}</div>
-      <p style="margin:0 0 16px;opacity:.85">${VG.esc(u.name || 'No name yet')} · ${hasPassword ? (u.state === 'active' ? 'pre-approved' : 'password set') : 'waiting for sign-up'}</p>
+      <p style="margin:0 0 6px;opacity:.85">${VG.esc(u.name || 'No name yet')} · ${hasPassword ? (u.state === 'active' ? 'pre-approved' : 'password set') : 'waiting for sign-up'}</p>
+      <p style="margin:0 0 16px;font-size:.9rem;opacity:.85">${u.emailed ? (u.email_configured ? `✉ Emailed to ${VG.esc(u.email)}` : `✉ Email is not set up on the server yet, so share the ID yourself.`) : 'No email given, so share the ID yourself.'}</p>
       <div class="btn-row"><button class="btn btn-amber btn-sm" data-copy="${VG.esc(u.uid)}">${VG.icon.copy} Copy ID</button>
         <button class="btn btn-sm" style="background:color-mix(in srgb,var(--on-band) 14%,transparent);color:var(--on-band)" id="copy-msg">${VG.icon.copy} Copy invitation</button></div></div>`;
     $('#gen-result [data-copy]').addEventListener('click', (e) => copy(e.currentTarget.dataset.copy));
@@ -333,6 +378,7 @@
           ${u.state === 'pending' ? `<button class="btn btn-danger btn-sm" data-reject="${u.id}">Reject</button>` : ''}
           <button class="btn btn-soft btn-sm" id="m-reset" title="Clears the password so they sign up again with the same ID">Reset sign-up</button>
           <a class="btn btn-soft btn-sm" href="#chats/${u.id}" id="m-chat">${VG.icon.chat} Chat</a>
+          ${u.email ? `<button class="btn btn-soft btn-sm" id="m-invite" type="button">${VG.icon.send} Email ${u.state === 'invited' ? 'VINC ID' : 'login details'}</button>` : ''}
         </div></div>
 
       <form class="card" id="m-edit"><h3>Details</h3>
@@ -367,6 +413,11 @@
     const reopen = async () => { await Promise.all([loadUsers(), loadStats()]); repaint(); openMember(id); };
     $('#drawer-close').onclick = () => dlg.close();
     $('#m-chat').addEventListener('click', () => dlg.close());
+    const inv = $('#m-invite');
+    if (inv) inv.addEventListener('click', () => VG.busy(inv, async () => {
+      try { const r = await VG.api(`/api/admin/users/${id}/invite`, { method: 'POST' }); VG.toast(r.configured ? `Sent to ${u.email}.` : 'Queued, but email is not set up on the server yet (see Settings).', r.configured ? 'ok' : 'bad'); }
+      catch (e) { fail(e); }
+    }));
     bindApprovalButtons(inner, () => { repaint(); openMember(id); });
     const revoke = $('#m-revoke');
     if (revoke) revoke.addEventListener('click', async () => {
@@ -534,7 +585,8 @@
             <label class="field"><span>Show to</span><select class="input" name="visibility"><option value="members">Members only</option><option value="public">Members and the public site</option></select></label>
           </div>
           <label class="field"><span>Update</span><textarea class="input" name="body" required maxlength="8000" style="min-height:150px"></textarea></label>
-          <label class="check" style="margin-bottom:14px"><input type="checkbox" name="pinned" value="1"> Pin to the top</label>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" name="pinned" value="1"> Pin to the top</label>
+          <label class="check" style="margin-bottom:14px;display:flex"><input type="checkbox" name="notify" value="1" checked> Email members about this update</label>
           <p class="form-error" id="news-err"></p>
           <button class="btn btn-primary" type="submit">${VG.icon.send} Publish</button>
         </form>
@@ -543,6 +595,7 @@
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.currentTarget));
       f.pinned = !!f.pinned;
+      f.notify = !!f.notify;
       await VG.busy(e.currentTarget.querySelector('[type=submit]'), async () => {
         try { await VG.api('/api/admin/news', { body: f }); VG.toast('Published.', 'ok'); e.target.reset(); paintNews(); loadStats(); } catch (ex) { $('#news-err').textContent = ex.message; }
       });
@@ -870,12 +923,39 @@
         <label class="field"><span>New password</span><div class="pwd-wrap"><input class="input" type="password" name="next" autocomplete="new-password" required><button type="button"></button></div></label>
         <label class="field"><span>Confirm new password</span><div class="pwd-wrap"><input class="input" type="password" name="confirm" autocomplete="new-password" required><button type="button"></button></div></label>
         <p class="form-error" id="ap-err"></p>
-        <button class="btn btn-primary" type="submit">Change password</button></form></div>`;
+        <button class="btn btn-primary" type="submit">Change password</button></form></div>
+      <div class="card" id="email-card"><div class="viewer-loading" style="min-height:120px"><div class="spinner"></div></div></div>`;
+    paintEmail();
     VG.bindPasswords(el);
     $('#set-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try { settings = await VG.api('/api/admin/settings', { method: 'PUT', body: Object.fromEntries(new FormData(e.currentTarget)) }); VG.currency = settings.currency || '₹'; document.dispatchEvent(new CustomEvent('vg:settings')); VG.toast('Settings saved.', 'ok'); } catch (ex) { fail(ex); }
     });
+    async function paintEmail() {
+      const box = $('#email-card');
+      if (!box) return;
+      let m;
+      try { m = await VG.api('/api/admin/email'); } catch (e) { box.textContent = e.message; return; }
+      const chip = (st) => st === 'sent' ? '<span class="chip ok">Sent</span>' : st === 'failed' ? '<span class="chip bad">Failed</span>' : '<span class="chip">Not sent</span>';
+      box.innerHTML = `<div class="card-head"><h3>Email</h3>${m.configured ? '<span class="chip ok"><span class="dot"></span>Connected</span>' : '<span class="chip bad"><span class="dot"></span>Not set up</span>'}</div>
+        ${m.configured
+          ? `<p class="muted small" style="margin-top:-4px">Sending from <b>${VG.esc(m.from)}</b> via ${VG.esc(m.host)}:${m.port}. Admin notifications go to <b>${VG.esc(m.admin_email || '—')}</b>.</p>`
+          : `<p class="muted small" style="margin-top:-4px">The server has no mail settings yet, so emails are logged below but not sent. Add SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASS to the server's <span class="mono">.env</span> file and restart.</p>`}
+        <form class="btn-row" id="email-test" style="margin-bottom:16px"><input class="input" type="email" name="to" placeholder="${VG.esc(m.admin_email || 'you@example.com')}" style="min-height:38px;width:min(320px,100%)"><button class="btn btn-soft btn-sm" type="submit">${VG.icon.send} Send a test email</button></form>
+        <h4 class="label">Recent emails</h4>
+        ${m.log.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>To</th><th>Subject</th><th>Status</th><th>When</th></tr></thead><tbody>
+          ${m.log.map((l) => `<tr><td class="small">${VG.esc(l.to_addr)}</td><td class="small">${VG.esc(l.subject)}${l.error ? `<div style="color:var(--bad)">${VG.esc(l.error)}</div>` : ''}</td><td>${chip(l.status)}</td><td class="small">${VG.dateTime(l.at)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="muted">No emails yet.</p>'}`;
+      $('#email-test').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        await VG.busy(form.querySelector('button'), async () => {
+          try { const r = await VG.api('/api/admin/email/test', { body: { to: form.to.value } }); VG.toast(`Test email sent to ${r.to}.`, 'ok'); setTimeout(paintEmail, 1500); }
+          catch (ex) { fail(ex); }
+        });
+      });
+    }
+
     $('#admin-pwd').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.currentTarget));

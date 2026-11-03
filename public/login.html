@@ -43,13 +43,9 @@
     <div class="auth-card">
       <p class="label">Log in</p>
       <h1>Good to see you</h1>
-      <p class="sub">Use the VINC ID and password you signed up with.</p>
-      <div class="seg" id="who" role="group" aria-label="I am">
-        <button type="button" aria-pressed="true" data-value="member">Advisor / Investor</button>
-        <button type="button" aria-pressed="false" data-value="admin">Admin</button>
-      </div>
+      <p class="sub">Use your VINC ID and the password you chose when you signed up.</p>
       <form id="login-form" novalidate>
-        <label class="field"><span id="uid-label">VINC ID</span>
+        <label class="field"><span>VINC ID</span>
           <input class="input mono" name="uid" id="uid" autocomplete="username" placeholder="VG-ADV-XXXXXX" required autocapitalize="characters" spellcheck="false">
         </label>
         <label class="field"><span>Password</span>
@@ -58,7 +54,8 @@
         <p class="form-error" id="err" role="alert"></p>
         <button class="btn btn-primary" type="submit" style="width:100%">Log in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="arrow" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
       </form>
-      <p class="alt" id="alt">Got a new VINC ID from the team? <a href="/signup">Activate it here</a></p>
+      <p class="alt">Got a new VINC ID from the team? <a href="/signup">Activate it here</a></p>
+      <p class="alt">No VINC ID yet? <a href="/#request">Ask for one</a></p>
       <p class="alt"><a href="/">← Back to VINC Global</a></p>
     </div>
   </section>
