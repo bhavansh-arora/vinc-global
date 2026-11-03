@@ -1,0 +1,20 @@
+# VINC Global: one container, its own data volume, reachable only from the VPS itself.
+# Your existing web server (nginx / Caddy / Traefik) forwards vinc-global.com to it.
+services:
+  vinc-global:
+    build: .
+    image: vinc-global:latest
+    container_name: vinc-global
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TRUST_PROXY: "1"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Vinc@2026}   # only used the very first time
+      MAX_UPLOAD_MB: "25"
+    ports:
+      - "127.0.0.1:${VG_PORT:-3010}:3000"            # not exposed to the internet directly
+    volumes:
+      - vinc-global-data:/data                        # SQLite database + uploads
+volumes:
+  vinc-global-data:
+    name: vinc-global-data

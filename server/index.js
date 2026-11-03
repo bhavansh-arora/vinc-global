@@ -40,6 +40,11 @@ app.use(express.urlencoded({ extended: false, limit: '200kb' }));
 app.use(A.loadUser);
 
 // API
+// Health check for Docker / uptime monitors.
+app.get('/healthz', (_req, res) => {
+  try { require('./db').db.prepare('SELECT 1').get(); res.json({ ok: true }); }
+  catch { res.status(503).json({ ok: false }); }
+});
 app.use('/api/auth', require('./routes-auth').router);
 app.use('/api/member', require('./routes-member').router);
 app.use('/api/chat', require('./routes-chat').member);

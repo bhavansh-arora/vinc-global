@@ -46,9 +46,12 @@ Data (database + uploads) is stored in `./data` unless `DATA_DIR` is set. See `.
 Any VPS works: Lightsail, a DigitalOcean droplet, EC2 or similar.
 
 ```bash
-docker build -t vinc-global .
-docker run -d --name vinc-global -p 3000:3000 -v /srv/vinc-global:/data -e TRUST_PROXY=1 vinc-global
+git clone -b claude/wizardly-thompson-x44m2x https://github.com/bhavansh-arora/vinc-global.git /opt/vinc-global
+cd /opt/vinc-global && docker compose up -d --build     # listens on 127.0.0.1:3010 only
+curl -s http://127.0.0.1:3010/healthz                   # {"ok":true}
 ```
+
+The database and uploads live in the `vinc-global-data` Docker volume. To update later, run `git pull && docker compose up -d --build`; the data stays. To back up, run `docker run --rm -v vinc-global-data:/data -v $PWD:/b alpine tar czf /b/vinc-global-backup.tgz -C /data .`
 
 Put nginx or Caddy in front with HTTPS (Caddy: `vinc-global.com { reverse_proxy localhost:3000 }`), and set `client_max_body_size 30m;` if you use nginx.
 
