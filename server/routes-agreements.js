@@ -280,7 +280,7 @@ admin.post('/send', (req, res) => {
   let users;
   const base = "SELECT * FROM users WHERE role != 'admin' AND status NOT IN ('invited','rejected','revoked')";
   if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
-  else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor' AND investor_type IS NULL").all();
+  else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor'").all();   // STEAM-IE shareholders included
   else if (b.audience === 'steam_ie') users = db.prepare(base + " AND role = 'investor' AND investor_type = 'steam_ie'").all();
   else if (b.audience === 'all') users = db.prepare(base).all();
   else {

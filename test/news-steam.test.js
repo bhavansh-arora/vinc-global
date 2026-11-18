@@ -149,7 +149,7 @@ test('STEAM-IE shareholders are investors with no onboarding agreement for now',
   assert.equal(ag.body.members.find((x) => x.id === user.id).label, 'STEAM-IE shareholder');
   assert.equal((await admin('GET', '/api/admin/stats')).body.steam_ie, 1);
 
-  // "All investors" leaves STEAM-IE shareholders out; they have their own audience
+  // STEAM-IE shareholders can be reached on their own, and "All investors" includes them
   const custom = await PDFDocument.create(); custom.addPage([595, 842]);
   const cf = new FormData();
   cf.append('file', new Blob([Buffer.from(await custom.save())], { type: 'application/pdf' }), 'swap.pdf');
@@ -157,12 +157,20 @@ test('STEAM-IE shareholders are investors with no onboarding agreement for now',
   const tpl = await admin('POST', '/api/admin/agreements/custom', undefined, cf);
   assert.equal(tpl.status, 200, JSON.stringify(tpl.body));
   const tid = tpl.body.id || (tpl.body.template && tpl.body.template.id);
-  const toInvestors = await admin('POST', '/api/admin/agreements/send', { template_id: tid, audience: 'investors' });
-  assert.equal(toInvestors.body.sent, db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'investor' AND investor_type IS NULL").get().n);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM agreements WHERE user_id = ?').get(user.id).n, 0);
   const toSwap = await admin('POST', '/api/admin/agreements/send', { template_id: tid, audience: 'steam_ie' });
   assert.equal(toSwap.body.sent, 1);
   assert.equal((await sie('GET', '/api/member/agreements')).body.agreements[0].title, 'STEAM-IE Share Swap Agreement');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM agreements WHERE template_id = ?').get(tid).n, 1, 'only the STEAM-IE shareholder got it');
+  // A second document sent to "All investors" reaches direct investors and STEAM-IE shareholders alike
+  const doc2 = await PDFDocument.create(); doc2.addPage([595, 842]);
+  const cf2 = new FormData();
+  cf2.append('file', new Blob([Buffer.from(await doc2.save())], { type: 'application/pdf' }), 'notice.pdf');
+  cf2.append('title', 'Investor Notice');
+  const tpl2 = await admin('POST', '/api/admin/agreements/custom', undefined, cf2);
+  const tid2 = tpl2.body.id || (tpl2.body.template && tpl2.body.template.id);
+  const toInvestors = await admin('POST', '/api/admin/agreements/send', { template_id: tid2, audience: 'investors' });
+  assert.equal(toInvestors.body.sent, db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'investor'").get().n);
+  assert.ok((await sie('GET', '/api/member/agreements')).body.agreements.some((a) => a.title === 'Investor Notice'));
 
   // Turning an investor into a STEAM-IE shareholder withdraws the unsigned term sheet
   const ch = await admin('PATCH', `/api/admin/users/${invUser.id}`, { role: 'steam_ie' });

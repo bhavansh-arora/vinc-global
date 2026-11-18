@@ -359,8 +359,8 @@
         <button class="viewer-close" type="button" data-x>${VG.icon.x}<span>Close</span></button></div>
       <div class="choice-row col" id="aud">
         <button type="button" data-v="advisors" aria-pressed="false"><b>All advisors</b> · ${eligible.filter((m) => m.role === 'advisor').length}</button>
-        <button type="button" data-v="investors" aria-pressed="false"><b>All investors</b> · ${eligible.filter((m) => m.role === 'investor' && !m.investor_type).length}</button>
-        <button type="button" data-v="steam_ie" aria-pressed="false"><b>All STEAM-IE shareholders</b> · ${eligible.filter((m) => m.investor_type === 'steam_ie').length}</button>
+        <button type="button" data-v="investors" aria-pressed="false"><b>All investors</b> <span class="muted small">incl. STEAM-IE shareholders</span> · ${eligible.filter((m) => m.role === 'investor').length}</button>
+        <button type="button" data-v="steam_ie" aria-pressed="false"><b>Only STEAM-IE shareholders</b> · ${eligible.filter((m) => m.investor_type === 'steam_ie').length}</button>
         <button type="button" data-v="all" aria-pressed="false"><b>Everyone</b> · ${eligible.length}</button>
         <button type="button" data-v="pick" aria-pressed="true"><b>Selected members</b></button>
       </div>

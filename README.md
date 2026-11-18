@@ -33,7 +33,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 
 ## Onboarding agreements
 
-**Advisors** must sign the **Advisory Agreement** and the **Investor Term Sheet**; **investors** must sign the **Investor Term Sheet**. Both appear automatically in the member's Agreements section. **STEAM-IE shareholders** get no agreement automatically: their own share-swap agreement is to be uploaded later under **Other agreements** and sent to **All STEAM-IE shareholders**. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
+**Advisors** must sign the **Advisory Agreement** and the **Investor Term Sheet**; **investors** must sign the **Investor Term Sheet**. Both appear automatically in the member's Agreements section. **STEAM-IE shareholders** get no agreement automatically: their own share-swap agreement is to be uploaded later under **Other agreements** and sent to **Only STEAM-IE shareholders**. **All investors** always includes STEAM-IE shareholders, so they receive every document sent to investors. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
 
 **Other agreements.** The admin can upload any PDF (an NDA, a side letter, an addendum):
 - Its underscore blanks are found automatically. Next to a preview of the document, the admin sets what each one is for: the member fills it in (required or optional), fixed text typed once, the agreement date, a member's or the company's signature, date or place, or left blank.
