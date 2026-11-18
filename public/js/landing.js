@@ -218,8 +218,9 @@
       document.getElementById('news-list').innerHTML = items.map((n, i) => `
         <article class="news-item reveal ${n.pinned ? 'pinned' : ''}" style="--rd:${i * 70}ms">
           <div class="nm">${n.tag ? `<span class="chip warn">${VG.esc(n.tag)}</span>` : ''}<span>${VG.date(n.created_at)}</span>${n.pinned ? '<span class="chip teal">Pinned</span>' : ''}</div>
-          <h3>${VG.esc(n.title)}</h3><p>${VG.esc(n.body)}</p>
+          <h3>${VG.esc(n.title)}</h3>${n.body ? `<p>${VG.esc(n.body)}</p>` : ''}${VG.newsFile(n)}
         </article>`).join('');
+      VG.bindNewsFiles(document.getElementById('news-list'), items);
       VG.reveal(document.getElementById('news'));
     }).catch(() => { /* news is optional */ });
 

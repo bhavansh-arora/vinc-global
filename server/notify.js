@@ -25,9 +25,11 @@ function invitation(u) {
     to: u.email, kind: 'invite', subject: `Your VINC ID: ${u.uid}`,
     title: 'Welcome to VINC Global',
     greeting: `Hello ${first(u)},`,
-    lines: [`You have been invited to VINC Global, the private portal for the ${u.role === 'investor' ? 'investors' : 'advisors'} who back ${company()}.`,
+    lines: [u.investor_type === 'steam_ie'
+        ? `You have been invited to VINC Global as a STEAM-IE shareholder joining ${company()} through the share swap. This is the private portal for the people who back ${company()}.`
+        : `You have been invited to VINC Global, the private portal for the ${u.role === 'investor' ? 'investors' : 'advisors'} who back ${company()}.`,
       'Use your VINC ID below to sign up and choose a password. The team will then open the doors for you.'],
-    facts: [['Your VINC ID', u.uid], ['Role', u.role === 'investor' ? 'Investor' : 'Advisor']],
+    facts: [['Your VINC ID', u.uid], ['Role', require('./auth').memberLabel(u)]],
     button: { text: 'Activate my VINC ID', path: `/signup?uid=${encodeURIComponent(u.uid)}` },
   });
 }
@@ -99,7 +101,7 @@ function newsPublished(n) {
     mail.send({
       to: u.email, kind: 'news', subject: `VINC update: ${n.title}`,
       title: n.title, greeting: `Hello ${first(u)},`,
-      lines: n.body.split(/\n{2,}/).slice(0, 6),
+      lines: [...n.body.split(/\n{2,}/).slice(0, 6), ...(n.file_stored ? [`This update includes ${n.file_mime === 'application/pdf' ? 'a PDF' : 'an image'}: open it in the portal.`] : [])],
       button: { text: 'Read in VINC Global', path: '/advisor#news' },
       footer: 'You get these because you are a VINC Global member. Turn off update emails under Account in the portal.',
     });

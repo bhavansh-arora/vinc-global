@@ -288,7 +288,7 @@
     el.innerHTML = `
       <div class="hello"><canvas id="hello-canvas" aria-hidden="true"></canvas>
         <div class="hello-row"><div>
-          <p class="label">${me.role === 'investor' ? 'Investor' : 'Advisor'} · VINC Global</p>
+          <p class="label">${VG.esc(me.member_label || (me.role === 'investor' ? 'Investor' : 'Advisor'))} · VINC Global</p>
           <h2>${VG.greeting()}, ${VG.esc(first)}</h2>
           <p>Thank you for backing VINC. Here is everything new since your last visit.</p></div>
           <div class="btn-row"><span class="chip mono">${VG.esc(me.uid)}</span><span class="chip">${me.access_type === 'permanent' ? 'Permanent access' : 'Temporary access'}</span></div>
@@ -304,13 +304,15 @@
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="card-head"><h3>Latest news</h3><a class="btn btn-soft btn-xs" href="#news">All news</a></div>
-          <div class="news-list">${data.news.slice(0, 3).map(newsItem).join('') || emptyHtml('news', 'No news yet. The team will post updates here.')}</div></div>
+          <div class="news-list" data-home-news>${data.news.slice(0, 3).map(newsItem).join('') || emptyHtml('news', 'No news yet. The team will post updates here.')}</div></div>
         <div class="card"><div class="card-head"><h3>New in the data room</h3><a class="btn btn-soft btn-xs" href="#vault">Open data room</a></div>
           <div class="docs" style="grid-template-columns:1fr">${data.documents.slice(0, 4).map(docCard).join('') || emptyHtml('vault', 'Documents will appear here once the team shares them.')}</div></div>
       </div>`;
     VG.bubbles($('#hello-canvas'), { density: 0.6, dark: true });
     el.querySelectorAll('[data-count]').forEach((n) => VG.countUp(n, Number(n.dataset.count)));
     bindDocs(el);
+    const homeNews = el.querySelector('[data-home-news]');
+    if (homeNews) VG.bindNewsFiles(homeNews, data.news);
   }
 
   function agreementBanner() {
@@ -342,13 +344,14 @@
   function newsItem(n) {
     return `<article class="news-item ${n.pinned ? 'pinned' : ''}">
       <div class="nm">${n.tag ? `<span class="chip warn">${VG.esc(n.tag)}</span>` : ''}<span>${VG.date(n.created_at)}</span>${n.pinned ? '<span class="chip teal">Pinned</span>' : ''}</div>
-      <h3>${VG.esc(n.title)}</h3><p>${VG.esc(n.body)}</p></article>`;
+      <h3>${VG.esc(n.title)}</h3>${n.body ? `<p>${VG.esc(n.body)}</p>` : ''}${VG.newsFile(n)}</article>`;
   }
 
   // ---------------------------------------------------------------- news
   function renderNews() {
     $('.view[data-view=news]').innerHTML = `<div class="section-title"><div><h2>News from the lab</h2><p>Milestones, partnerships and updates, newest first.</p></div></div>
       <div class="news-list">${data.news.map(newsItem).join('') || `<div class="card">${emptyHtml('news', 'No news yet.')}</div>`}</div>`;
+    VG.bindNewsFiles($('.view[data-view=news]'), data.news);
   }
 
   // ---------------------------------------------------------------- data room
@@ -602,7 +605,7 @@
             <tr><th>Email</th><td>${VG.esc(me.email || '—')}</td></tr>
             <tr><th>Phone</th><td>${VG.esc(me.phone || '—')}</td></tr>
             <tr><th>Organisation</th><td>${VG.esc(me.organisation || '—')}</td></tr>
-            <tr><th>Role</th><td>${me.role === 'investor' ? 'Investor' : 'Advisor'}</td></tr>
+            <tr><th>Role</th><td>${VG.esc(me.member_label || (me.role === 'investor' ? 'Investor' : 'Advisor'))}</td></tr>
             <tr><th>Access</th><td>${me.access_type === 'permanent' ? 'Permanent' : 'Temporary, until ' + VG.dateTime(me.access_expires_at)}</td></tr>
           </tbody></table></div>
           <h3 style="margin-top:22px">Recent activity</h3>

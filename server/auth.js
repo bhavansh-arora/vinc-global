@@ -53,6 +53,14 @@ function accessState(u) {
   return u.status; // invited | pending | rejected | revoked
 }
 
+/** "Advisor", "Investor" or "STEAM-IE shareholder". */
+function memberLabel(u) {
+  if (!u) return '';
+  if (u.role === 'admin') return 'Admin';
+  if (u.role === 'investor' && u.investor_type === 'steam_ie') return 'STEAM-IE shareholder';
+  return u.role === 'investor' ? 'Investor' : 'Advisor';
+}
+
 function publicUser(u) {
   if (!u) return null;
   return {
@@ -61,6 +69,8 @@ function publicUser(u) {
     access_expires_at: u.access_expires_at, approved_at: u.approved_at, signup_at: u.signup_at,
     renewal_requested: !!u.renewal_requested, last_login_at: u.last_login_at, created_at: u.created_at,
     email_updates: u.email_updates === undefined ? true : !!u.email_updates,
+    investor_type: u.investor_type || null,
+    member_label: memberLabel(u),
     state: accessState(u),
   };
 }
@@ -107,5 +117,5 @@ function tempHours() {
 
 module.exports = {
   createSession, destroySession, loadUser, accessState, publicUser,
-  requireAuth, requireAdmin, requireMember, rateLimit, clearRateLimit, logAccess, tempHours,
+  memberLabel, requireAuth, requireAdmin, requireMember, rateLimit, clearRateLimit, logAccess, tempHours,
 };

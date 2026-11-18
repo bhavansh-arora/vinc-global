@@ -22,9 +22,17 @@ const memberOr404 = (req, res) => {
   return u;
 };
 
-function newUid(role) {
+/** The admin picks advisor, investor or STEAM-IE shareholder (an investor who joins through the share swap). */
+function memberType(v, fallback = { role: 'advisor', investor_type: null }) {
+  if (v === 'steam_ie') return { role: 'investor', investor_type: 'steam_ie' };
+  if (v === 'investor') return { role: 'investor', investor_type: null };
+  if (v === 'advisor') return { role: 'advisor', investor_type: null };
+  return fallback;
+}
+
+function newUid(role, investorType) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const prefix = role === 'investor' ? 'VG-INV-' : 'VG-ADV-';
+  const prefix = investorType === 'steam_ie' ? 'VG-SIE-' : role === 'investor' ? 'VG-INV-' : 'VG-ADV-';
   for (;;) {
     const bytes = crypto.randomBytes(6);
     let s = '';
@@ -51,6 +59,7 @@ r.get('/stats', (_req, res) => {
     members: one("SELECT COUNT(*) AS n FROM users WHERE role != 'admin'"),
     advisors: one("SELECT COUNT(*) AS n FROM users WHERE role = 'advisor'"),
     investors: one("SELECT COUNT(*) AS n FROM users WHERE role = 'investor'"),
+    steam_ie: one("SELECT COUNT(*) AS n FROM users WHERE role = 'investor' AND investor_type = 'steam_ie'"),
     pending: one("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'"),
     invited: one("SELECT COUNT(*) AS n FROM users WHERE status = 'invited'"),
     active_temp: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'temporary' AND access_expires_at > ?", now),
@@ -78,12 +87,12 @@ r.get('/users', (_req, res) => {
 });
 
 r.post('/users', (req, res) => {
-  const role = req.body.role === 'investor' ? 'investor' : 'advisor';
+  const { role, investor_type } = memberType(req.body.role);
   let uid = str(req.body.uid, 40).toUpperCase();
   if (uid) {
     if (!/^[A-Z0-9][A-Z0-9-]{3,39}$/.test(uid)) return res.status(400).json({ error: 'Custom IDs use letters, numbers and dashes (4–40 characters).' });
     if (uid === 'ADMIN' || db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) return res.status(409).json({ error: 'That ID is already taken.' });
-  } else uid = newUid(role);
+  } else uid = newUid(role, investor_type);
   const name = str(req.body.name, 120) || null;
   const email = str(req.body.email, 160) || null;
   const password = req.body.password ? String(req.body.password) : '';
@@ -94,10 +103,10 @@ r.post('/users', (req, res) => {
   }
   if (access && !password) return res.status(400).json({ error: 'Set a starting password to pre-approve access, or leave access empty so the member signs up.' });
   const now = Date.now();
-  const info = db.prepare(`INSERT INTO users (uid, role, name, email, notes, password_hash, status, signup_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(uid, role, name, email, str(req.body.notes, 500) || null, password ? bcrypt.hashSync(password, 10) : null, password ? 'pending' : 'invited', password ? now : null, now);
+  const info = db.prepare(`INSERT INTO users (uid, role, investor_type, name, email, notes, password_hash, status, signup_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(uid, role, investor_type, name, email, str(req.body.notes, 500) || null, password ? bcrypt.hashSync(password, 10) : null, password ? 'pending' : 'invited', password ? now : null, now);
   const u = userRow(info.lastInsertRowid);
-  A.logAccess(u.id, 'id_generated', role);
+  A.logAccess(u.id, 'id_generated', A.memberLabel(u));
   if (access) grant(u, access, req.body.hours);
   const fresh = userRow(u.id);
   const emailed = fresh.email ? (password ? notify.loginReady(fresh) : notify.invitation(fresh)) : false;
@@ -118,10 +127,22 @@ r.get('/users/:id', (req, res) => {
 r.patch('/users/:id', (req, res) => {
   const u = memberOr404(req, res); if (!u) return;
   const f = (k, max) => (req.body[k] === undefined ? u[k] : str(req.body[k], max) || null);
-  const role = req.body.role === 'investor' || req.body.role === 'advisor' ? req.body.role : u.role;
-  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, organisation = ?, notes = ?, role = ? WHERE id = ?')
-    .run(f('name', 120), f('email', 160), f('phone', 40), f('organisation', 160), f('notes', 500), role, u.id);
-  res.json(A.publicUser(userRow(u.id)));
+  const t = memberType(req.body.role, { role: u.role, investor_type: u.investor_type || null });
+  db.prepare('UPDATE users SET name = ?, email = ?, phone = ?, organisation = ?, notes = ?, role = ?, investor_type = ? WHERE id = ?')
+    .run(f('name', 120), f('email', 160), f('phone', 40), f('organisation', 160), f('notes', 500), t.role, t.investor_type, u.id);
+  const fresh = userRow(u.id);
+  if (A.memberLabel(fresh) !== A.memberLabel(u)) {
+    A.logAccess(u.id, 'member_type_changed', `${A.memberLabel(u)} → ${A.memberLabel(fresh)}`);
+    // Standard documents this member no longer needs (and has not signed yet) are withdrawn.
+    const AGM = require('./agreements');
+    const keep = new Set(fresh.investor_type === 'steam_ie' ? [] : AGM.kindsForRole(fresh.role));
+    for (const a of db.prepare("SELECT * FROM agreements WHERE user_id = ? AND kind != 'custom' AND status = 'pending'").all(u.id)) {
+      if (keep.has(a.kind)) continue;
+      db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(`Not needed for ${A.memberLabel(fresh)}s`, Date.now(), a.id);
+      AGM.logEvent(a.id, 'Admin', 'Withdrawn', `Member is now a ${A.memberLabel(fresh)}`, req.ip);
+    }
+  }
+  res.json(A.publicUser(fresh));
 });
 
 // Email the VINC ID again (or the "login ready" note when a password was set for them).
@@ -187,25 +208,38 @@ r.delete('/users/:id', (req, res) => {
 });
 
 // ---------- news ----------
-r.get('/news', (_req, res) => res.json(db.prepare('SELECT * FROM news ORDER BY pinned DESC, created_at DESC').all()));
-r.post('/news', (req, res) => {
+const NEWS_COLS = () => require('./routes-auth').NEWS_COLS;
+const yes = (v) => v === true || v === 1 || ['1', 'true', 'on', 'yes'].includes(String(v).toLowerCase());
+r.get('/news', (_req, res) => res.json(db.prepare(`SELECT ${NEWS_COLS()} FROM news ORDER BY pinned DESC, created_at DESC`).all()));
+// A post can carry one PDF or image (field "file"), sent as multipart; plain JSON posts still work.
+r.post('/news', up.single('news'), (req, res) => {
   const title = str(req.body.title, 200), body = str(req.body.body, 8000);
-  if (!title || !body) return res.status(400).json({ error: 'Add a title and the news text.' });
+  const f = req.file;
+  if (!title || (!body && !f)) {
+    if (f) up.removeStored(f.filename);
+    return res.status(400).json({ error: 'Add a headline and the news text (or attach a PDF or image).' });
+  }
   const vis = req.body.visibility === 'public' ? 'public' : 'members';
-  const info = db.prepare('INSERT INTO news (title, body, tag, visibility, pinned, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(title, body, str(req.body.tag, 40) || null, vis, req.body.pinned ? 1 : 0, Date.now());
+  const info = db.prepare('INSERT INTO news (title, body, tag, visibility, pinned, created_at, file_stored, file_name, file_mime, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(title, body, str(req.body.tag, 40) || null, vis, yes(req.body.pinned) ? 1 : 0, Date.now(),
+      f ? f.filename : null, f ? f.originalname.slice(0, 200) : null, f ? f.vgMime : null, f ? f.size : null);
   const row = db.prepare('SELECT * FROM news WHERE id = ?').get(info.lastInsertRowid);
-  if (req.body.notify !== false) notify.newsPublished(row);
-  res.json(row);
+  if (req.body.notify === undefined || yes(req.body.notify)) notify.newsPublished(row);
+  res.json(db.prepare(`SELECT ${NEWS_COLS()} FROM news WHERE id = ?`).get(row.id));
 });
 r.patch('/news/:id', (req, res) => {
   const n = db.prepare('SELECT * FROM news WHERE id = ?').get(req.params.id);
   if (!n) return res.status(404).json({ error: 'Not found.' });
   db.prepare('UPDATE news SET pinned = ?, visibility = ? WHERE id = ?')
     .run(req.body.pinned === undefined ? n.pinned : (req.body.pinned ? 1 : 0), ['public', 'members'].includes(req.body.visibility) ? req.body.visibility : n.visibility, n.id);
-  res.json(db.prepare('SELECT * FROM news WHERE id = ?').get(n.id));
+  res.json(db.prepare(`SELECT ${NEWS_COLS()} FROM news WHERE id = ?`).get(n.id));
 });
-r.delete('/news/:id', (req, res) => { db.prepare('DELETE FROM news WHERE id = ?').run(req.params.id); res.json({ ok: true }); });
+r.delete('/news/:id', (req, res) => {
+  const n = db.prepare('SELECT file_stored FROM news WHERE id = ?').get(req.params.id);
+  db.prepare('DELETE FROM news WHERE id = ?').run(req.params.id);
+  if (n && n.file_stored) up.removeStored(n.file_stored);
+  res.json({ ok: true });
+});
 
 // ---------- documents (PDF, Excel or link; all view only) ----------
 r.get('/documents', (_req, res) => {
@@ -340,15 +374,15 @@ r.post('/requests/:id/approve', (req, res) => {
   if (!q) return res.status(404).json({ error: 'Not found.' });
   if (q.status !== 'new') return res.status(400).json({ error: 'This request has already been handled.' });
   if (db.prepare("SELECT 1 FROM users WHERE lower(email) = lower(?) AND role != 'admin'").get(q.email)) return res.status(409).json({ error: 'A member with this email already exists.' });
-  const role = ['advisor', 'investor'].includes(req.body.role) ? req.body.role : q.role;
+  const { role, investor_type } = memberType(req.body.role, memberType(q.role));
   const now = Date.now();
   const user = tx(() => {
-    const info = db.prepare("INSERT INTO users (uid, role, name, email, phone, organisation, notes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'invited', ?)")
-      .run(newUid(role), role, q.name, q.email, q.phone, q.organisation, q.message ? `Request: ${q.message}`.slice(0, 500) : null, now);
+    const info = db.prepare("INSERT INTO users (uid, role, investor_type, name, email, phone, organisation, notes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'invited', ?)")
+      .run(newUid(role, investor_type), role, investor_type, q.name, q.email, q.phone, q.organisation, q.message ? `Request: ${q.message}`.slice(0, 500) : null, now);
     db.prepare("UPDATE id_requests SET status = 'approved', user_id = ?, handled_at = ? WHERE id = ?").run(info.lastInsertRowid, now, q.id);
     return userRow(info.lastInsertRowid);
   });
-  A.logAccess(user.id, 'id_generated', `${role} (from website request)`);
+  A.logAccess(user.id, 'id_generated', `${A.memberLabel(user)} (from website request)`);
   const emailed = notify.invitation(user);
   res.json({ ...A.publicUser(user), emailed, email_configured: mail.status().configured });
 });

@@ -75,6 +75,9 @@ const KINDS = {
 // Which built-in documents each role must sign to become permanent.
 const ROLE_KINDS = { advisor: ['advisory', 'term_sheet'], investor: ['term_sheet'] };
 const kindsForRole = (role) => ROLE_KINDS[role] || ROLE_KINDS.advisor;
+// STEAM-IE shareholders (share swap) will get their own onboarding agreement later; until the admin sends
+// one, nothing is shared with them for signing.
+const kindsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : kindsForRole(user.role));
 const TICKETS = { 1: 'Option 1: Rs. 6,00,000', 2: 'Option 2: Rs. 12,00,000' };
 const CONSENT = 'I have read this document in full. I agree to fill it in and sign it electronically, and I accept that my electronic signature is as binding as a handwritten one. I understand that VINC Global records the date and time, the place I enter, my IP address and device, and my location if I choose to share it.';
 
@@ -511,7 +514,7 @@ function ensureFor(user, kindOrTemplate, actor = 'System') {
 /** All standard documents the member's role requires (those whose PDF has been uploaded). */
 function ensureRole(user, actor = 'System') {
   const created = [];
-  for (const kind of kindsForRole(user.role)) {
+  for (const kind of kindsFor(user)) {
     const r = ensureFor(user, kind, actor);
     if (r.created) created.push(r.agreement);
   }
@@ -556,7 +559,7 @@ function requiredDone(userId) {
   const rows = db.prepare("SELECT kind, status, mandatory FROM agreements WHERE user_id = ? AND status != 'void'").all(userId);
   const required = rows.filter((r) => r.mandatory);
   if (!required.length) return false;
-  for (const kind of kindsForRole(user.role)) {
+  for (const kind of kindsFor(user)) {
     if (activeTemplate(kind) && !rows.some((r) => r.kind === kind && r.status === 'executed')) return false;
   }
   return required.every((r) => r.status === 'executed');
@@ -576,7 +579,7 @@ function publicAgreement(ag, { admin = false } = {}) {
 }
 
 module.exports = {
-  KINDS, MODES, TICKETS, CONSENT, kindsForRole, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  KINDS, MODES, TICKETS, CONSENT, kindsForRole, kindsFor, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

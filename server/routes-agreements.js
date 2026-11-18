@@ -63,7 +63,8 @@ function memberList(u) {
   const voided = db.prepare("SELECT kind, template_id, void_reason FROM agreements WHERE user_id = ? AND status = 'void' ORDER BY id DESC").all(u.id);
   return {
     agreements: rows.map((r) => ({ ...AG.publicAgreement(r), last_void_reason: (voided.find((v) => v.template_id === r.template_id) || {}).void_reason || null })),
-    waiting_for_template: !rows.length && !AG.kindsForRole(u.role).some((k) => AG.activeTemplate(k)),
+    waiting_for_template: !rows.length && !AG.kindsFor(u).some((k) => AG.activeTemplate(k)),
+    steam_ie: u.investor_type === 'steam_ie',
     all_executed: AG.requiredDone(u.id),
   };
 }
@@ -142,7 +143,7 @@ member.post('/:id/sign', async (req, res) => {
 // ================================================================== admin
 function standardInfo(kind) {
   const t = AG.activeTemplate(kind);
-  const base = { kind, title: AG.KINDS[kind].title, required_for: kind === 'term_sheet' ? 'Advisors and investors' : 'Advisors' };
+  const base = { kind, title: AG.KINDS[kind].title, required_for: kind === 'term_sheet' ? 'Advisors and investors (not STEAM-IE shareholders)' : 'Advisors' };
   if (!t) return { ...base, uploaded: false };
   return { ...base, uploaded: true, id: t.id, original_name: t.original_name, pages: t.pages, uploaded_at: t.uploaded_at, sha256: t.sha256, matches_layout: t.sha256 === AG.KINDS[kind].sha256 };
 }
@@ -164,7 +165,7 @@ admin.get('/', (_req, res) => {
   for (const u of members) {
     const ags = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY id").all(u.id);
     for (const a of ags) rows.push({ user: A.publicUser(u), ...AG.publicAgreement(a, { admin: true }) });
-    for (const kind of AG.kindsForRole(u.role)) {
+    for (const kind of AG.kindsFor(u)) {
       if (!ags.some((a) => a.kind === kind)) rows.push({ user: A.publicUser(u), kind, title: AG.KINDS[kind].title, status: 'not_sent', mandatory: true });
     }
   }
@@ -174,7 +175,7 @@ admin.get('/', (_req, res) => {
     templates: [standardInfo('advisory'), standardInfo('term_sheet')],
     custom: db.prepare("SELECT * FROM agreement_templates WHERE kind = 'custom' AND active = 1 ORDER BY id DESC").all().map(customInfo),
     company: { signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at },
-    members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, state: A.accessState(u), access_type: u.access_type })),
+    members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, label: A.memberLabel(u), state: A.accessState(u), access_type: u.access_type })),
     rows,
   });
 });
@@ -279,7 +280,8 @@ admin.post('/send', (req, res) => {
   let users;
   const base = "SELECT * FROM users WHERE role != 'admin' AND status NOT IN ('invited','rejected','revoked')";
   if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
-  else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor'").all();
+  else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor' AND investor_type IS NULL").all();
+  else if (b.audience === 'steam_ie') users = db.prepare(base + " AND role = 'investor' AND investor_type = 'steam_ie'").all();
   else if (b.audience === 'all') users = db.prepare(base).all();
   else {
     const ids = (Array.isArray(b.user_ids) ? b.user_ids : [b.user_id]).map(Number).filter(Boolean).slice(0, 1000);

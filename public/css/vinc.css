@@ -532,6 +532,31 @@ dialog.drawer[open] { animation: vg-drawer-in var(--dur-4) var(--ease-out); }
 .news-item .nm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font: 500 .75rem var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .news-item h3 { margin: 0; font-size: 1.2rem; }
 .news-item p { margin: 0; color: var(--ink-2); white-space: pre-wrap; }
+/* A PDF or image published with a post */
+.news-media { display: block; margin: 6px 0 2px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--card-2); cursor: zoom-in; width: 100%; max-width: 640px; }
+.news-media img { display: block; width: 100%; max-height: 380px; object-fit: cover; transition: transform var(--dur-3) var(--ease-out); }
+.news-media:hover img { transform: scale(1.02); }
+.news-media:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.news-pdf { display: flex; align-items: center; gap: 12px; margin: 6px 0 2px; padding: 10px 14px 10px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2); color: var(--ink); text-align: left; cursor: pointer; max-width: 460px; font: inherit; transition: border-color var(--dur-2) ease, transform var(--dur-2) var(--ease-out); }
+.news-pdf:hover { border-color: var(--rust); transform: translateY(-1px); }
+.news-pdf:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.np-t { display: grid; gap: 2px; min-width: 0; }
+.np-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-t span { font-size: var(--t-small); color: var(--muted); }
+.drop.drop-sm { padding: 16px 14px; }
+.drop.drop-sm svg { width: 26px; height: 26px; }
+.news-pick { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2); }
+.news-pick img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex: none; }
+.news-pick .np-t { flex: 1; }
+.field-label { display: block; font-weight: 700; font-size: var(--t-small); }
+/* STEAM-IE shareholders (share swap) */
+.chip.steam { background: color-mix(in srgb, var(--olive-soft) 70%, var(--plum-soft)); color: var(--ink); border-color: transparent; }
+.steam-note { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin-bottom: 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--olive-soft) 55%, var(--card)); border: 1px solid color-mix(in srgb, var(--olive) 30%, transparent); animation: steam-in var(--dur-3) var(--ease-out); }
+.steam-note b { display: block; margin-bottom: 2px; }
+.steam-note p { margin: 0; font-size: var(--t-small); color: var(--ink-2); }
+.steam-ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--olive); color: #fff; }
+.steam-ic svg { width: 18px; height: 18px; }
+@keyframes steam-in { from { opacity: 0; transform: translateY(-4px); } }
 
 /* Document cards */
 .docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }

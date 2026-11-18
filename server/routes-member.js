@@ -50,7 +50,7 @@ r.get('/overview', (req, res) => {
   const kyc = db.prepare('SELECT status, COUNT(*) AS n FROM kyc_docs WHERE user_id = ? GROUP BY status').all(u.id);
   res.json({
     user: A.publicUser(u),
-    news: db.prepare('SELECT id, title, body, tag, pinned, visibility, created_at FROM news ORDER BY pinned DESC, created_at DESC LIMIT 30').all(),
+    news: db.prepare(`SELECT ${require('./routes-auth').NEWS_COLS} FROM news ORDER BY pinned DESC, created_at DESC LIMIT 30`).all(),
     documents: docsFor(u.id),
     unread,
     kyc,

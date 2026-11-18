@@ -133,7 +133,13 @@
     const h = Math.floor(ms / HOUR), m = Math.floor((ms % HOUR) / 60000);
     return h ? `${h}h ${m}m` : `${m}m`;
   }
-  const roleLabel = (r) => (r === 'investor' ? 'Investor' : 'Advisor');
+  const roleLabel = (r) => (r === 'steam_ie' ? 'STEAM-IE shareholder' : r === 'investor' ? 'Investor' : 'Advisor');
+  // Advisor, Investor or STEAM-IE shareholder (an investor who joins through the share swap).
+  const typeLabel = (u) => u.member_label || roleLabel(u.investor_type === 'steam_ie' ? 'steam_ie' : u.role);
+  const typeOf = (u) => (u.investor_type === 'steam_ie' ? 'steam_ie' : u.role);
+  const steamChip = (u) => (u.investor_type === 'steam_ie' ? '<span class="chip steam" title="Joins through the STEAM-IE share swap">STEAM-IE · share swap</span>' : '');
+  const TYPE_OPTIONS = (cur) => [['advisor', 'Advisor'], ['investor', 'Investor'], ['steam_ie', 'STEAM-IE shareholder']]
+    .map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('');
   const memberOptions = (sel) => users
     .map((u) => `<option value="${u.id}" ${String(sel) === String(u.id) ? 'selected' : ''}>${VG.esc(u.name || '(no name yet)')} · ${VG.esc(u.uid)}</option>`).join('');
 
@@ -148,7 +154,7 @@
           <div class="btn-row"><a class="btn btn-amber btn-sm" href="#members">${VG.icon.plus} Generate an ID</a><a class="btn btn-ghost btn-sm" style="border-color:var(--on-band);color:var(--on-band)" href="#documents">${VG.icon.upload} Publish a document</a></div></div>
       </div>
       <div class="grid grid-4">
-        ${tile('Members', s.members, `${s.advisors} advisors · ${s.investors} investors`, '--plum', '#members')}
+        ${tile('Members', s.members, `${s.advisors} advisors · ${s.investors - (s.steam_ie || 0)} investors${s.steam_ie ? ` · ${s.steam_ie} STEAM-IE` : ''}`, '--plum', '#members')}
         ${tile('Waiting for approval', s.pending, `${s.invited} IDs not yet activated`, '--amber', '#approvals')}
         ${tile('Active access', s.active_temp + s.active_perm, `${s.active_temp} temporary · ${s.active_perm} permanent`, '--teal', '#members')}
         ${tile('Unread questions', s.unread, 'in Ask the Founder', '--rust', '#chats')}
@@ -191,7 +197,7 @@
       ${pending.length ? `<div class="grid grid-2">${pending.map((u, i) => `
         <article class="card glowy" style="animation:vg-rise .6s var(--ease-out) ${i * 60}ms backwards">
           <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><span class="avatar">${VG.initials(u.name)}</span>
-            <div style="min-width:0;flex:1"><b style="font-family:var(--display);font-size:1.15rem">${VG.esc(u.name || '—')}</b><div class="muted small mono">${VG.esc(u.uid)} · ${roleLabel(u.role)}</div></div>${stateChip(u)}</div>
+            <div style="min-width:0;flex:1"><b style="font-family:var(--display);font-size:1.15rem">${VG.esc(u.name || '—')}</b><div class="muted small mono">${VG.esc(u.uid)} · ${typeLabel(u)}</div></div>${stateChip(u)}</div>
           <div class="small" style="display:grid;gap:2px;margin-bottom:14px;color:var(--ink-2)">
             <span>${VG.esc(u.email || '')}${u.phone ? ' · ' + VG.esc(u.phone) : ''}</span>
             ${u.organisation ? `<span>${VG.esc(u.organisation)}</span>` : ''}
@@ -241,7 +247,7 @@
             ${r.phone ? `<span>${VG.esc(r.phone)}</span>` : ''}${r.organisation ? `<span>${VG.esc(r.organisation)}</span>` : ''}</div>
           ${r.message ? `<p class="small" style="margin:0 0 14px;padding:10px 12px;border-left:3px solid var(--amber);background:var(--card-2);border-radius:8px;white-space:pre-wrap">${VG.esc(r.message)}</p>` : ''}
           <div class="btn-row">
-            <select class="input" data-role="${r.id}" style="min-height:36px;width:auto"><option value="advisor" ${r.role === 'advisor' ? 'selected' : ''}>Advisor</option><option value="investor" ${r.role === 'investor' ? 'selected' : ''}>Investor</option></select>
+            <select class="input" data-role="${r.id}" style="min-height:36px;width:auto">${TYPE_OPTIONS(r.role)}</select>
             <button class="btn btn-teal btn-sm" data-rq-ok="${r.id}">${VG.icon.spark} Generate ID &amp; email it</button>
             <button class="btn btn-soft btn-sm" data-rq-no="${r.id}">Dismiss</button>
           </div>
@@ -272,7 +278,8 @@
     el.innerHTML = `<div class="grid grid-2" style="align-items:start">
         <form class="card" id="gen-form"><h3>Generate a new ID</h3>
           <p class="muted small" style="margin-top:-4px">Share the ID with the person. They sign up with it and choose a password, then you approve them.</p>
-          <div class="seg" id="gen-role" style="margin-bottom:14px"><button type="button" aria-pressed="true" data-value="advisor">Advisor</button><button type="button" aria-pressed="false" data-value="investor">Investor</button></div>
+          <div class="seg" id="gen-role" style="margin-bottom:10px"><button type="button" aria-pressed="true" data-value="advisor">Advisor</button><button type="button" aria-pressed="false" data-value="investor">Investor</button><button type="button" aria-pressed="false" data-value="steam_ie">STEAM-IE shareholder</button></div>
+          <div class="steam-note" id="gen-steam" hidden><span class="steam-ic">${VG.icon.spark}</span><div><b>Share swap from STEAM-IE</b><p>For STEAM-IE shareholders joining VINC through the share swap. They are investors in the portal (data room, investment tracking, Ask the Founder). No onboarding agreement is sent to them for now: their own agreement will be added later from Agreements.</p></div></div>
           <div class="form-row">
             <label class="field"><span>Name <span class="hint">optional</span></span><input class="input" name="name"></label>
             <label class="field"><span>Email <span class="hint">we email the ID here</span></span><input class="input" type="email" name="email"></label>
@@ -292,11 +299,17 @@
       <div class="card">
         <div class="card-head"><h3>All members <span class="muted small" style="font-family:var(--body)">${users.length}</span></h3>
           <div class="btn-row"><input class="input" id="m-search" placeholder="Search name, ID or email" style="min-height:38px;width:240px">
+            <select class="input" id="m-type" style="min-height:38px;width:auto" aria-label="Member type"><option value="">All types</option><option value="advisor">Advisors</option><option value="investor">Investors</option><option value="steam_ie">STEAM-IE shareholders</option></select>
             <select class="input" id="m-filter" style="min-height:38px;width:auto"><option value="">Everyone</option><option value="pending">Awaiting approval</option><option value="active">Active</option><option value="expired">Window ended</option><option value="invited">Not signed up</option><option value="revoked">Revoked / rejected</option></select></div></div>
         <div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>ID</th><th>Status</th><th>KYC</th><th class="num">Invested</th><th></th></tr></thead><tbody id="m-body"></tbody></table></div>
       </div>`;
     let role = 'advisor';
-    VG.seg($('#gen-role'), (v) => { role = v; });
+    const uidInput = $('#gen-form [name=uid]');
+    VG.seg($('#gen-role'), (v) => {
+      role = v;
+      $('#gen-steam').hidden = v !== 'steam_ie';
+      uidInput.placeholder = v === 'steam_ie' ? 'VG-SIE-XXXXXX' : v === 'investor' ? 'VG-INV-XXXXXX' : 'VG-ADV-XXXXXX';
+    });
     VG.bindPasswords(el);
     $('#gen-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -313,6 +326,7 @@
     });
     $('#m-search').addEventListener('input', paintMembers);
     $('#m-filter').addEventListener('change', paintMembers);
+    $('#m-type').addEventListener('change', paintMembers);
     paintMembers();
   }
 
@@ -321,7 +335,7 @@
     const msg = hasPassword
       ? `Hello${u.name ? ' ' + u.name.split(' ')[0] : ''}, your VINC Global login is ready.\nID: ${u.uid}\nLog in at ${location.origin}/login with the password I shared separately.`
       : `Hello${u.name ? ' ' + u.name.split(' ')[0] : ''}, welcome to VINC Global, the portal for VINC's advisors and investors.\nYour VINC ID: ${u.uid}\nActivate it here: ${link}`;
-    $('#gen-result').innerHTML = `<div class="id-card"><p class="label">New ${roleLabel(u.role).toLowerCase()} ID</p>
+    $('#gen-result').innerHTML = `<div class="id-card"><p class="label">New ${typeLabel(u)} ID</p>
       <div class="uid">${VG.esc(u.uid)}</div>
       <p style="margin:0 0 6px;opacity:.85">${VG.esc(u.name || 'No name yet')} · ${hasPassword ? (u.state === 'active' ? 'pre-approved' : 'password set') : 'waiting for sign-up'}</p>
       <p style="margin:0 0 16px;font-size:.9rem;opacity:.85">${u.emailed ? (u.email_configured ? `✉ Emailed to ${VG.esc(u.email)}` : `✉ Email is not set up on the server yet, so share the ID yourself.`) : 'No email given, so share the ID yourself.'}</p>
@@ -338,14 +352,16 @@
   function paintMembers() {
     const q = ($('#m-search').value || '').toLowerCase();
     const f = $('#m-filter').value;
+    const ty = $('#m-type').value;
     const list = users.filter((u) => {
+      if (ty && typeOf(u) !== ty) return false;
       if (q && ![u.name, u.uid, u.email, u.organisation].some((x) => (x || '').toLowerCase().includes(q))) return false;
       if (f === 'revoked') return u.state === 'revoked' || u.state === 'rejected';
       return !f || u.state === f;
     });
     $('#m-body').innerHTML = list.map((u) => `<tr>
-        <td><div style="display:flex;gap:10px;align-items:center"><span class="avatar" style="width:34px;height:34px;font-size:.85rem${u.role === 'investor' ? ';background:var(--teal);color:#fff' : ''}">${VG.initials(u.name)}</span>
-          <div><b>${VG.esc(u.name || '—')}</b><div class="muted small">${roleLabel(u.role)}${u.email ? ' · ' + VG.esc(u.email) : ''}</div></div></div></td>
+        <td><div style="display:flex;gap:10px;align-items:center"><span class="avatar ${u.investor_type === 'steam_ie' ? 'steam' : ''}" style="width:34px;height:34px;font-size:.85rem${u.role === 'investor' ? ';background:var(--teal);color:#fff' : ''}">${VG.initials(u.name)}</span>
+          <div><b>${VG.esc(u.name || '—')}</b> ${steamChip(u)}<div class="muted small">${typeLabel(u)}${u.email ? ' · ' + VG.esc(u.email) : ''}</div></div></div></td>
         <td class="mono small">${VG.esc(u.uid)}</td>
         <td>${stateChip(u)}</td>
         <td>${u.kyc_count ? `${u.kyc_count} file${u.kyc_count > 1 ? 's' : ''}${u.kyc_pending ? ` <span class="chip warn">${u.kyc_pending} to review</span>` : ''}` : '<span class="muted">—</span>'}</td>
@@ -367,7 +383,7 @@
     const hours = Number(settings.temp_access_hours) || 72;
     inner.innerHTML = `
       <div class="drawer-head"><div style="display:flex;gap:12px;align-items:center"><span class="avatar" style="width:52px;height:52px;font-size:1.2rem">${VG.initials(u.name)}</span>
-        <div><h2>${VG.esc(u.name || 'No name yet')}</h2><div class="btn-row" style="gap:6px"><span class="chip mono">${VG.esc(u.uid)}</span>${stateChip(u)}</div></div></div>
+        <div><h2>${VG.esc(u.name || 'No name yet')}</h2><div class="btn-row" style="gap:6px"><span class="chip mono">${VG.esc(u.uid)}</span>${stateChip(u)}${steamChip(u)}</div></div></div>
         <button class="viewer-close" type="button" id="drawer-close">${VG.icon.x}<span>Close</span></button></div>
 
       <div class="card"><h3>Access</h3>
@@ -387,7 +403,7 @@
       <form class="card" id="m-edit"><h3>Details</h3>
         <div class="form-row">
           <label class="field"><span>Name</span><input class="input" name="name" value="${VG.esc(u.name || '')}"></label>
-          <label class="field"><span>Role</span><select class="input" name="role"><option value="advisor" ${u.role === 'advisor' ? 'selected' : ''}>Advisor</option><option value="investor" ${u.role === 'investor' ? 'selected' : ''}>Investor</option></select></label>
+          <label class="field"><span>Member type</span><select class="input" name="role">${TYPE_OPTIONS(typeOf(u))}</select></label>
           <label class="field"><span>Email</span><input class="input" name="email" value="${VG.esc(u.email || '')}"></label>
           <label class="field"><span>Phone</span><input class="input" name="phone" value="${VG.esc(u.phone || '')}"></label>
         </div>
@@ -610,20 +626,50 @@
             <label class="field"><span>Tag <span class="hint">optional</span></span><input class="input" name="tag" placeholder="Milestone, Partnership…" maxlength="40"></label>
             <label class="field"><span>Show to</span><select class="input" name="visibility"><option value="members">Members only</option><option value="public">Members and the public site</option></select></label>
           </div>
-          <label class="field"><span>Update</span><textarea class="input" name="body" required maxlength="8000" style="min-height:150px"></textarea></label>
+          <label class="field"><span>Update</span><textarea class="input" name="body" maxlength="8000" style="min-height:150px"></textarea></label>
+          <div class="field"><span class="field-label">Attach a PDF or image <span class="hint">optional</span></span>
+            <label class="drop drop-sm" id="news-drop">${VG.icon.upload}<b>Drop a PDF or image here, or click to choose</b><span class="muted small">PDF, JPG, PNG or WebP · up to 25 MB</span><span class="file-name"></span><input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"></label>
+            <div class="news-pick" id="news-pick" hidden></div></div>
           <label class="check" style="margin-bottom:8px"><input type="checkbox" name="pinned" value="1"> Pin to the top</label>
           <label class="check" style="margin-bottom:14px;display:flex"><input type="checkbox" name="notify" value="1" checked> Email members about this update</label>
           <p class="form-error" id="news-err"></p>
           <button class="btn btn-primary" type="submit">${VG.icon.send} Publish</button>
         </form>
         <div class="card"><h3>Published</h3><div class="news-list" id="news-list"></div></div></div>`;
+    const newsDrop = $('#news-drop');
+    const newsInput = newsDrop.querySelector('input');
+    bindDrop(newsDrop);
+    let pickUrl = null;
+    const showPick = () => {
+      const file = newsInput.files[0];
+      const box = $('#news-pick');
+      if (pickUrl) { URL.revokeObjectURL(pickUrl); pickUrl = null; }
+      if (!file) { box.hidden = true; box.innerHTML = ''; newsDrop.hidden = false; newsDrop.querySelector('.file-name').textContent = ''; return; }
+      const isImg = /^image\//.test(file.type);
+      if (isImg) pickUrl = URL.createObjectURL(file);
+      box.innerHTML = `${isImg ? `<img src="${pickUrl}" alt="">` : '<span class="kind pdf" style="width:36px;height:42px;font-size:.58rem;padding-bottom:5px">PDF</span>'}
+        <span class="np-t"><b>${VG.esc(file.name)}</b><span>${VG.size(file.size)} · will be published with the post</span></span>
+        <button type="button" class="btn btn-soft btn-xs" id="news-unpick">Remove</button>`;
+      box.hidden = false;
+      newsDrop.hidden = true;
+      $('#news-unpick').addEventListener('click', () => { newsInput.value = ''; showPick(); });
+    };
+    newsInput.addEventListener('change', showPick);
     $('#news-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const f = Object.fromEntries(new FormData(e.currentTarget));
-      f.pinned = !!f.pinned;
-      f.notify = !!f.notify;
-      await VG.busy(e.currentTarget.querySelector('[type=submit]'), async () => {
-        try { await VG.api('/api/admin/news', { body: f }); VG.toast('Published.', 'ok'); e.target.reset(); paintNews(); loadStats(); } catch (ex) { $('#news-err').textContent = ex.message; }
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      $('#news-err').textContent = '';
+      if (!String(fd.get('body') || '').trim() && !newsInput.files.length) { $('#news-err').textContent = 'Write the update, or attach a PDF or image.'; return; }
+      fd.set('pinned', fd.get('pinned') ? '1' : '0');
+      fd.set('notify', fd.get('notify') ? '1' : '0');
+      if (!newsInput.files.length) fd.delete('file');
+      await VG.busy(form.querySelector('[type=submit]'), async () => {
+        try {
+          const n = await VG.api('/api/admin/news', { method: 'POST', form: fd });
+          VG.toast(n.has_file ? `Published with ${/^image\//.test(n.file_mime) ? 'the image' : 'the PDF'}.` : 'Published.', 'ok');
+          form.reset(); newsInput.value = ''; showPick(); paintNews(); loadStats();
+        } catch (ex) { $('#news-err').textContent = ex.message; }
       });
     });
     paintNews();
@@ -634,9 +680,10 @@
     const box = $('#news-list');
     box.innerHTML = list.map((n) => `<article class="news-item ${n.pinned ? 'pinned' : ''}">
         <div class="nm">${n.tag ? `<span class="chip warn">${VG.esc(n.tag)}</span>` : ''}<span>${VG.date(n.created_at)}</span><span class="chip ${n.visibility === 'public' ? 'teal' : ''}">${n.visibility === 'public' ? 'Public' : 'Members'}</span></div>
-        <h3>${VG.esc(n.title)}</h3><p>${VG.esc(n.body)}</p>
+        <h3>${VG.esc(n.title)}</h3>${n.body ? `<p>${VG.esc(n.body)}</p>` : ''}${VG.newsFile(n)}
         <div class="btn-row"><button class="btn btn-soft btn-xs" data-pin="${n.id}" data-on="${n.pinned ? 0 : 1}">${n.pinned ? 'Unpin' : 'Pin'}</button><button class="btn btn-soft btn-xs" data-vis="${n.id}" data-to="${n.visibility === 'public' ? 'members' : 'public'}">${n.visibility === 'public' ? 'Members only' : 'Make public'}</button><button class="btn btn-danger btn-xs" data-nd="${n.id}">Delete</button></div>
       </article>`).join('') || empty('news', 'No news yet.');
+    VG.bindNewsFiles(box, list);
     $$('[data-pin]', box).forEach((b) => b.addEventListener('click', async () => { await VG.api(`/api/admin/news/${b.dataset.pin}`, { method: 'PATCH', body: { pinned: b.dataset.on === '1' } }).catch(fail); paintNews(); }));
     $$('[data-vis]', box).forEach((b) => b.addEventListener('click', async () => { await VG.api(`/api/admin/news/${b.dataset.vis}`, { method: 'PATCH', body: { visibility: b.dataset.to } }).catch(fail); paintNews(); }));
     $$('[data-nd]', box).forEach((b) => b.addEventListener('click', async () => {
@@ -836,7 +883,7 @@
       box.innerHTML = list.map((c) => `<button type="button" data-c="${c.id}" aria-pressed="${c.id === selected}">
           <span class="avatar" style="width:40px;height:40px;font-size:.9rem${c.role === 'investor' ? ';background:var(--teal);color:#fff' : ''}">${VG.initials(c.name)}</span>
           <span class="meta"><b>${VG.esc(c.name || c.uid)}</b>
-            <span>${c.last_body ? `${c.last_sender === 'founder' ? 'You: ' : ''}${VG.esc(c.last_body)}` : `<i>${roleLabel(c.role)} · no messages yet</i>`}</span></span>
+            <span>${c.last_body ? `${c.last_sender === 'founder' ? 'You: ' : ''}${VG.esc(c.last_body)}` : `<i>${typeLabel(c)} · no messages yet</i>`}</span></span>
           <span class="side-meta">${c.last_at ? `<span class="muted small">${VG.ago(c.last_at)}</span>` : ''}
             ${c.unread ? `<span class="n">${c.unread}</span>` : c.needs_reply ? '<span class="reply-dot" title="Needs reply"></span>' : ''}</span>
         </button>`).join('') || `<div class="empty" style="padding:24px">${VG.icon.users}<p>${convos.length ? 'No one matches.' : 'Members appear here once they sign up with their VINC ID.'}</p></div>`;
@@ -856,7 +903,7 @@
       const note = STATE_NOTE[c.state];
       const th = $('#inbox-thread');
       th.innerHTML = `<header class="chat-head"><span class="avatar">${VG.initials(c.name)}</span>
-          <div class="who"><b>${VG.esc(c.name || 'Member')}</b><span>${roleLabel(c.role)} · ${VG.esc(c.uid)}${c.organisation ? ' · ' + VG.esc(c.organisation) : ''}</span></div>
+          <div class="who"><b>${VG.esc(c.name || 'Member')}</b><span>${typeLabel(c)} · ${VG.esc(c.uid)}${c.organisation ? ' · ' + VG.esc(c.organisation) : ''}</span></div>
           <button class="x" type="button" data-open-member="${id}" title="Member details" aria-label="Member details">${VG.icon.user.replace('<svg', '<svg width="18" height="18"')}</button></header>
         ${note ? `<div class="chat-note">${VG.icon.clock.replace('<svg', '<svg width="16" height="16"')} <span>${VG.esc(first)} ${VG.esc(note)}</span></div>` : ''}
         <div class="chat-log" aria-live="polite"><div class="viewer-loading" style="min-height:160px"><div class="spinner"></div></div></div>

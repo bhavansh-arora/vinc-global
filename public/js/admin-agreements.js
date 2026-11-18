@@ -22,7 +22,7 @@
     try { d = await VG.api('/api/admin/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const toSign = d.rows.filter((r) => r.status === 'member_signed').length;
     el.innerHTML = `<div class="section-title"><div><h2>Onboarding agreements</h2>
-        <p>Advisors sign the Advisory Agreement <b>and</b> the Investor Term Sheet; investors sign the Investor Term Sheet. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
+        <p>Advisors sign the Advisory Agreement <b>and</b> the Investor Term Sheet; investors sign the Investor Term Sheet. STEAM-IE shareholders (share swap) get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
       <div class="grid grid-2" style="align-items:start">
         <div class="card"><div class="card-head"><h3>Documents</h3></div>
           <p class="muted small" style="margin-top:-6px">Upload each PDF once. It is stored privately on the server and shown to members to fill in and sign.</p>
@@ -64,7 +64,7 @@
       const rows = d.rows.filter((r) => !f || r.status === f);
       $('#agr-table').innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>Document</th><th>Status</th><th>Member signed</th><th>VINC signed</th><th></th></tr></thead><tbody>
         ${rows.map((r) => `<tr>
-          <td><b>${VG.esc(r.user.name || '—')}</b><div class="muted small mono">${VG.esc(r.user.uid)} · ${r.user.role === 'investor' ? 'Investor' : 'Advisor'}${r.user.access_type === 'permanent' ? ' · permanent' : ''}</div></td>
+          <td><b>${VG.esc(r.user.name || '—')}</b><div class="muted small mono">${VG.esc(r.user.uid)} · ${VG.esc(r.user.member_label || (r.user.role === 'investor' ? 'Investor' : 'Advisor'))}${r.user.access_type === 'permanent' ? ' · permanent' : ''}</div></td>
           <td>${VG.esc(r.title)} ${r.mandatory ? '' : '<span class="chip" style="font-size:.68rem">Optional</span>'}${r.ref ? `<div class="muted small mono">${VG.esc(r.ref)}</div>` : ''}</td>
           <td><span class="chip ${STATUS[r.status][1]}"><span class="dot"></span>${STATUS[r.status][0]}</span></td>
           <td class="small">${r.member_signed_at ? `${VG.dateTime(r.member_signed_at)}<div class="muted">${VG.esc(r.member_place || '')}</div>` : '—'}</td>
@@ -170,7 +170,7 @@
         <div class="card-head"><div><p class="label" style="margin:0">${VG.esc(a.ref)}</p><h3 style="margin:0">Countersign: ${VG.esc(a.title)}</h3></div>
           <button class="viewer-close" type="button" data-x>${VG.icon.x}<span>Close</span></button></div>
         <div class="cs-grid">
-          <div><h4 class="label">${u.role === 'investor' ? 'Investor' : 'Advisor'}: ${VG.esc(u.name || u.uid)} (${VG.esc(u.uid)})</h4>
+          <div><h4 class="label">${VG.esc(u.member_label || (u.role === 'investor' ? 'Investor' : 'Advisor'))}: ${VG.esc(u.name || u.uid)} (${VG.esc(u.uid)})</h4>
             <div class="table-wrap"><table class="t"><tbody>${fieldRows(a, d.labels)}
               <tr><th>Signed at</th><td>${VG.dateTime(a.member_signed_at)}</td></tr>
               <tr><th>Place</th><td>${VG.esc(a.member_place || '')}</td></tr>
@@ -359,13 +359,14 @@
         <button class="viewer-close" type="button" data-x>${VG.icon.x}<span>Close</span></button></div>
       <div class="choice-row col" id="aud">
         <button type="button" data-v="advisors" aria-pressed="false"><b>All advisors</b> · ${eligible.filter((m) => m.role === 'advisor').length}</button>
-        <button type="button" data-v="investors" aria-pressed="false"><b>All investors</b> · ${eligible.filter((m) => m.role === 'investor').length}</button>
+        <button type="button" data-v="investors" aria-pressed="false"><b>All investors</b> · ${eligible.filter((m) => m.role === 'investor' && !m.investor_type).length}</button>
+        <button type="button" data-v="steam_ie" aria-pressed="false"><b>All STEAM-IE shareholders</b> · ${eligible.filter((m) => m.investor_type === 'steam_ie').length}</button>
         <button type="button" data-v="all" aria-pressed="false"><b>Everyone</b> · ${eligible.length}</button>
         <button type="button" data-v="pick" aria-pressed="true"><b>Selected members</b></button>
       </div>
       <div id="pick" style="margin-top:12px">
         <input class="input" id="pick-q" placeholder="Search a name or VINC ID" style="min-height:38px;margin-bottom:8px">
-        <div class="pick-list">${eligible.map((m) => `<label class="check pick-row" data-q="${VG.esc(((m.name || '') + ' ' + m.uid).toLowerCase())}"><input type="checkbox" value="${m.id}"> <span><b>${VG.esc(m.name || '—')}</b> <span class="muted small mono">${VG.esc(m.uid)} · ${m.role === 'investor' ? 'Investor' : 'Advisor'}</span></span></label>`).join('') || '<p class="muted">No members yet.</p>'}</div>
+        <div class="pick-list">${eligible.map((m) => `<label class="check pick-row" data-q="${VG.esc(((m.name || '') + ' ' + m.uid).toLowerCase())}"><input type="checkbox" value="${m.id}"> <span><b>${VG.esc(m.name || '—')}</b> <span class="muted small mono">${VG.esc(m.uid)} · ${VG.esc(m.label || (m.role === 'investor' ? 'Investor' : 'Advisor'))}</span></span></label>`).join('') || '<p class="muted">No members yet.</p>'}</div>
       </div>
       <p class="muted small" style="margin:12px 0 0">Each person gets an email with a link to sign. Anyone who already has it waiting gets a reminder instead.</p>
       <p class="form-error" id="send-err"></p>

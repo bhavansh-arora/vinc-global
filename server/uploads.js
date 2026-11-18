@@ -14,15 +14,17 @@ const TYPES = {
   xlsx: { exts: ['.xlsx', '.xlsm'], test: (b) => b[0] === 0x50 && b[1] === 0x4b },
   csv: { exts: ['.csv'], test: (b) => !b.subarray(0, 512).includes(0) },
   jpg: { exts: ['.jpg', '.jpeg'], test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  webp: { exts: ['.webp'], test: (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP' },
   png: { exts: ['.png'], test: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
 };
-const MIME = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', jpg: 'image/jpeg', png: 'image/png' };
+const MIME = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
 const GROUPS = {
   pdf: ['pdf'],
   excel: ['xlsx', 'csv'],
   kyc: ['pdf', 'jpg', 'png'],
   certificate: ['pdf', 'jpg', 'png'],
+  news: ['pdf', 'jpg', 'png', 'webp'],
 };
 
 function typeForExt(ext) {

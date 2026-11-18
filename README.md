@@ -8,11 +8,11 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 **Public landing page (`/`)**: an introduction to the VINC Learning Centre and the Kaushal Bodh LMS, a "why now" timeline, a tour of the portal, the four onboarding steps, and public news.
 
 **Admin (log in at `/login` with VINC ID `admin` and password `Vinc@2026`; there is one login form for everyone)** has all rights:
-- **Members & IDs**: generate IDs for advisors (`VG-ADV-…`) or investors (`VG-INV-…`), with an optional custom ID, starting password and pre-approval. Copy an invitation message. Edit, revoke, reset or delete any member.
+- **Members & IDs**: generate IDs for advisors (`VG-ADV-…`), investors (`VG-INV-…`) or **STEAM-IE shareholders** (`VG-SIE-…`, investors who join through the share swap), with an optional custom ID, starting password and pre-approval. Copy an invitation message. Edit, revoke, reset or delete any member.
 - **ID requests**: people who filled in **Request a VINC ID** on the website. **Generate ID & email it** creates their ID and emails it with a sign-up link.
 - **Approvals**: approve a **temporary** window (72 hours by default; you can set custom hours) or **permanent** access, or reject.
 - **Documents**: choose **Upload PDF**, **Upload Excel** or **Add a link**. Each item opens view-only in a panel on the same page, with a **Close** button at the top. You can share an item with all members or with one member.
-- **News**: publish to members only, or to the public landing page as well. Posts can be pinned.
+- **News**: publish to members only, or to the public landing page as well. Posts can be pinned and can carry one PDF or image (JPG, PNG or WebP), which opens in the view-only viewer.
 - **KYC review**: view each uploaded file, then verify it or reject it with a note.
 - **Investments**: record each investment and upload share certificates.
 - **Share price**: publish the actual price (the live price members see) and projected prices.
@@ -33,7 +33,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 
 ## Onboarding agreements
 
-**Advisors** must sign the **Advisory Agreement** and the **Investor Term Sheet**; **investors** must sign the **Investor Term Sheet**. Both appear automatically in the member's Agreements section. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
+**Advisors** must sign the **Advisory Agreement** and the **Investor Term Sheet**; **investors** must sign the **Investor Term Sheet**. Both appear automatically in the member's Agreements section. **STEAM-IE shareholders** get no agreement automatically: their own share-swap agreement is to be uploaded later under **Other agreements** and sent to **All STEAM-IE shareholders**. The admin uploads the two PDFs once in **Admin → Agreements**. They are stored privately on the server and are never committed to this repository, which is public.
 
 **Other agreements.** The admin can upload any PDF (an NDA, a side letter, an addendum):
 - Its underscore blanks are found automatically. Next to a preview of the document, the admin sets what each one is for: the member fills it in (required or optional), fixed text typed once, the agreement date, a member's or the company's signature, date or place, or left blank.

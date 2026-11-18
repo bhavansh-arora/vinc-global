@@ -45,6 +45,25 @@
     if (s < 86400 * 30) return Math.round(s / 86400) + ' d ago';
     return VG.date(t);
   };
+  // The PDF or image published with a news post (admin, members and the public site share this).
+  VG.newsFile = function (n) {
+    if (!n.has_file) return '';
+    const src = `/api/auth/news/${n.id}/file`;
+    if (/^image\//.test(n.file_mime || '')) {
+      return `<button type="button" class="news-media" data-news-file="${n.id}" aria-label="Open the image: ${VG.esc(n.file_name || n.title)}"><img src="${src}" alt="${VG.esc(n.title)}" loading="lazy" draggable="false"></button>`;
+    }
+    return `<button type="button" class="news-pdf" data-news-file="${n.id}"><span class="kind pdf" style="width:36px;height:42px;font-size:.58rem;padding-bottom:5px">PDF</span>
+      <span class="np-t"><b>${VG.esc(n.file_name || 'Attachment.pdf')}</b><span>${VG.size(n.file_size)}${n.file_size ? ' · ' : ''}View PDF</span></span></button>`;
+  };
+  VG.bindNewsFiles = function (root, list) {
+    root.querySelectorAll('[data-news-file]').forEach((b) => b.addEventListener('click', () => {
+      const n = list.find((x) => String(x.id) === b.dataset.newsFile);
+      if (!n) return;
+      const src = `/api/auth/news/${n.id}/file`;
+      if (VG.openStored) VG.openStored(n.title, n.file_mime, src, n.file_name);
+      else window.open(src, '_blank', 'noopener');
+    }));
+  };
   VG.size = (b) => (!b ? '' : b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1024 / 1024).toFixed(1) + ' MB');
   VG.greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 

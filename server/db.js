@@ -234,6 +234,13 @@ addColumn('documents', 'link_embed', 'link_embed TEXT');
 addColumn('documents', 'link_frameable', 'link_frameable INTEGER');
 addColumn('documents', 'link_reason', 'link_reason TEXT');
 addColumn('documents', 'link_checked_at', 'link_checked_at INTEGER');
+// News can carry one PDF or image.
+addColumn('news', 'file_stored', 'file_stored TEXT');
+addColumn('news', 'file_name', 'file_name TEXT');
+addColumn('news', 'file_mime', 'file_mime TEXT');
+addColumn('news', 'file_size', 'file_size INTEGER');
+// Investors who join through the STEAM-IE share swap ('steam_ie'); NULL for everyone else.
+addColumn('users', 'investor_type', 'investor_type TEXT');
 
 const DEFAULT_SETTINGS = {
   company_name: 'VINC',

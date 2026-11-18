@@ -24,8 +24,27 @@ function publicSettings() {
 
 r.get('/settings', (_req, res) => res.json(publicSettings()));
 
+const NEWS_COLS = "id, title, body, tag, pinned, visibility, created_at, file_name, file_mime, file_size, CASE WHEN file_stored IS NULL THEN 0 ELSE 1 END AS has_file";
+
 r.get('/news', (_req, res) => {
-  res.json(db.prepare("SELECT id, title, body, tag, pinned, created_at FROM news WHERE visibility = 'public' ORDER BY pinned DESC, created_at DESC LIMIT 6").all());
+  res.json(db.prepare(`SELECT ${NEWS_COLS} FROM news WHERE visibility = 'public' ORDER BY pinned DESC, created_at DESC LIMIT 6`).all());
+});
+
+// The PDF or image published with a news post. Public posts are open to everyone; members-only posts need
+// an active member (or the admin). Shown inline, never cached.
+r.get('/news/:id/file', (req, res) => {
+  const n = db.prepare('SELECT * FROM news WHERE id = ?').get(req.params.id);
+  const ok = n && n.file_stored && (n.visibility === 'public' || (req.user && (req.user.role === 'admin' || A.accessState(req.user) === 'active')));
+  if (!ok) return res.status(404).json({ error: 'Not found.' });
+  const fs = require('node:fs');
+  const p = require('./uploads').storedPath(n.file_stored);
+  if (!fs.existsSync(p)) return res.status(404).json({ error: 'File missing on the server.' });
+  const safe = (n.file_name || 'attachment').replace(/[^\w.\- ]+/g, '_');
+  res.setHeader('Content-Type', n.file_mime || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `inline; filename="${safe}"`);
+  fs.createReadStream(p).pipe(res);
 });
 
 r.get('/me', (req, res) => res.json({ user: A.publicUser(req.user), settings: publicSettings() }));
@@ -119,4 +138,4 @@ r.post('/password', A.requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { router: r, passwordProblem, str };
+module.exports = { NEWS_COLS, router: r, passwordProblem, str };

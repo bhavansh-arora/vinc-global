@@ -52,7 +52,7 @@ admin.get('/', (_req, res) => {
     WHERE u.role != 'admin' AND (u.status != 'invited' OR EXISTS (SELECT 1 FROM messages m WHERE m.advisor_id = u.id))
     ORDER BY (last_at IS NULL), last_at DESC, u.name COLLATE NOCASE`).all();
   res.json(rows.map((u) => ({
-    id: u.id, uid: u.uid, name: u.name, role: u.role, organisation: u.organisation, email: u.email,
+    id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, member_label: A.memberLabel(u), organisation: u.organisation, email: u.email,
     state: A.accessState(u), access_type: u.access_type, access_expires_at: u.access_expires_at,
     last_body: u.last_body, last_sender: u.last_sender, last_at: u.last_at, total: u.total, unread: u.unread,
     needs_reply: u.last_sender === 'advisor',

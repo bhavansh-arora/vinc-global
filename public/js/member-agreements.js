@@ -19,8 +19,8 @@
     try { d = await VG.api('/api/member/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const me = VG.me || {};
     el.innerHTML = `<div class="section-title"><div><h2>Your agreements</h2>
-        <p>${me.access_type === 'permanent' ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
-      ${d.waiting_for_template ? `<div class="card">${emptyHtml('The VINC team is preparing your agreement. It will appear here, and you will get an email when it is ready.')}</div>` : ''}
+        <p>${me.access_type === 'permanent' || (d.steam_ie && !d.agreements.length) ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
+      ${d.waiting_for_template ? `<div class="card">${emptyHtml(d.steam_ie ? 'Your onboarding agreement for the STEAM-IE share swap is being prepared. It will appear here, and you will get an email when it is ready to sign.' : 'The VINC team is preparing your agreement. It will appear here, and you will get an email when it is ready.')}</div>` : ''}
       <div class="grid" style="gap:16px">${d.agreements.map(card).join('')}</div>
       <div class="card agr-note"><h3>How signing works</h3>
         <ol class="agr-how">
