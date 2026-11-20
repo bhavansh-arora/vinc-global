@@ -35,6 +35,9 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+// A stray promise rejection (for example inside a PDF library) is logged instead of stopping the portal.
+process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', (e && e.stack) || e));
+
 app.use(express.json({ limit: '1mb' }));   // signatures arrive as small PNG images
 app.use(express.urlencoded({ extended: false, limit: '200kb' }));
 app.use(A.loadUser);

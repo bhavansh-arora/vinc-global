@@ -135,7 +135,7 @@ r.patch('/users/:id', (req, res) => {
     A.logAccess(u.id, 'member_type_changed', `${A.memberLabel(u)} → ${A.memberLabel(fresh)}`);
     // Standard documents this member no longer needs (and has not signed yet) are withdrawn.
     const AGM = require('./agreements');
-    const keep = new Set(fresh.investor_type === 'steam_ie' ? [] : AGM.kindsForRole(fresh.role));
+    const keep = new Set(AGM.kindsFor(fresh));
     for (const a of db.prepare("SELECT * FROM agreements WHERE user_id = ? AND kind != 'custom' AND status = 'pending'").all(u.id)) {
       if (keep.has(a.kind)) continue;
       db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(`Not needed for ${A.memberLabel(fresh)}s`, Date.now(), a.id);
@@ -164,7 +164,7 @@ r.post('/users/:id/approve', (req, res) => {
   const AGM = require('./agreements');
   AGM.ensureRole(fresh, 'Admin');
   const toSign = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status = 'pending' AND mandatory = 1").all(fresh.id);
-  if (toSign.length) notify.agreementReady(fresh, toSign.map((a) => AGM.titleOf(a)).join(' and '));
+  if (toSign.length) notify.agreementReady(fresh, AGM.describe(toSign));
   res.json(A.publicUser(fresh));
 });
 

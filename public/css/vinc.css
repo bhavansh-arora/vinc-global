@@ -782,7 +782,21 @@ dialog.drawer[open] { animation: vg-drawer-in var(--dur-4) var(--ease-out); }
 
 .tpl { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1.5px dashed var(--line); border-radius: var(--radius-sm); background: var(--card-2); flex-wrap: wrap; }
 .tpl.ok { border-style: solid; }
+.tpl-main { flex: 1 1 240px; min-width: 0; }
+.tpl > .btn-row { flex: 1 1 100%; justify-content: flex-end; }
+.tpl > .kind { align-self: flex-start; }
 .tpl.busy { opacity: .6; pointer-events: none; }
+.tpl-group { margin-top: 16px; padding: 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--plum-soft) 35%, transparent); border: 1px solid color-mix(in srgb, var(--plum) 18%, transparent); }
+.tpl-todo { color: var(--warn); font-weight: 600; }
+.cfg-std { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--amber-soft); color: var(--ink); }
+/* Member side: "sign any one of these" */
+.agr-choice { margin-top: 18px; padding: 18px; border-radius: var(--radius); border: 1.5px dashed color-mix(in srgb, var(--plum) 40%, var(--line)); background: color-mix(in srgb, var(--plum-soft) 30%, var(--card)); }
+.agr-choice-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+.agr-choice-head h3 { margin: 0 0 2px; font-size: 1.1rem; }
+.agr-choice-head p { margin: 0; }
+.agr-or { flex: none; padding: 6px 12px; border-radius: 999px; background: var(--plum); color: #fff; font: 700 .72rem var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.agr-choice .agr-card { transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
+.agr-choice .agr-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .cs-sig { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fffdf8; flex-wrap: wrap; }
 .cs-sig img { height: 54px; max-width: 220px; object-fit: contain; }
 dialog.dlg.cs-dlg { width: min(980px, calc(100vw - 24px)); }

@@ -158,7 +158,7 @@ db.exec(`
 -- Onboarding agreements (see server/agreements.js).
 CREATE TABLE IF NOT EXISTS agreement_templates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','custom')),
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom')),
   title TEXT,
   stored_name TEXT NOT NULL,
   original_name TEXT,
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS agreements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ref TEXT NOT NULL UNIQUE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','custom')),
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom')),
   template_id INTEGER REFERENCES agreement_templates(id),
   mandatory INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','member_signed','executed','void')),
@@ -204,12 +204,14 @@ function addColumn(table, column, ddl) {
 
 // The first agreements release only allowed the two built-in documents. Rebuild those tables once so they
 // also accept custom agreements (SQLite cannot change a CHECK in place). Data is copied across unchanged.
+// Older databases only allowed some document kinds; rebuild those tables to allow every kind.
+const KIND_CHECK = "CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom'))";
 function relaxKindCheck(table) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
-  const OLD = "CHECK (kind IN ('advisory','term_sheet'))";
-  if (!row || !row.sql.includes(OLD)) return;
+  const OLD = /CHECK \(kind IN \('advisory','term_sheet'(,'custom')?\)\)/;
+  if (!row || !OLD.test(row.sql)) return;
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name).join(', ');
-  const sql = row.sql.replace(OLD, "CHECK (kind IN ('advisory','term_sheet','custom'))").replace(/^CREATE TABLE (IF NOT EXISTS )?"?\w+"?/, `CREATE TABLE ${table}__new`);
+  const sql = row.sql.replace(OLD, KIND_CHECK).replace(/^CREATE TABLE (IF NOT EXISTS )?"?\w+"?/, `CREATE TABLE ${table}__new`);
   db.exec('PRAGMA foreign_keys = OFF');
   db.exec('BEGIN');
   try {
@@ -218,7 +220,7 @@ function relaxKindCheck(table) {
     db.exec(`DROP TABLE ${table}`);
     db.exec(`ALTER TABLE ${table}__new RENAME TO ${table}`);
     db.exec('COMMIT');
-    console.log(`[db] upgraded table ${table} for custom agreements`);
+    console.log(`[db] upgraded table ${table} for all agreement kinds`);
   } catch (e) { db.exec('ROLLBACK'); throw e; } finally { db.exec('PRAGMA foreign_keys = ON'); }
 }
 relaxKindCheck('agreement_templates');
@@ -227,6 +229,8 @@ addColumn('agreement_templates', 'title', 'title TEXT');
 addColumn('agreement_templates', 'fields', 'fields TEXT');
 addColumn('agreement_templates', 'required', 'required INTEGER NOT NULL DEFAULT 0');
 addColumn('agreements', 'mandatory', 'mandatory INTEGER NOT NULL DEFAULT 1');
+// A template is ready to sign once its blanks are set up (measured standard documents always are).
+addColumn('agreement_templates', 'ready', 'ready INTEGER NOT NULL DEFAULT 1');
 db.exec('CREATE INDEX IF NOT EXISTS idx_agreements_user ON agreements(user_id, kind)');
 addColumn('users', 'email_updates', 'email_updates INTEGER NOT NULL DEFAULT 1');
 // Links: can the site be shown inside the portal? (see server/links.js)

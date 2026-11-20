@@ -1,6 +1,7 @@
 'use strict';
-// Onboarding agreements. Advisors sign the Advisory Agreement and the Investor Term Sheet; investors sign the
-// Term Sheet. The admin uploads the PDFs once (they are not kept in the repository) and can add any other
+// Onboarding agreements. Advisors sign the Advisory Agreement and one investment agreement (the Investor Term
+// Sheet, the Shareholder Loan Agreement or the Convertible Debt Note Agreement); investors sign one investment
+// agreement. The admin uploads the PDFs once (they are not kept in the repository) and can add any other
 // agreement: its underscore blanks are found automatically and the admin says what each one is for.
 // Members fill the blanks and sign; the company countersigns (by hand, or automatically with its saved
 // signature). The executed PDF has the blanks filled, both signatures, a reference on every page and a
@@ -14,11 +15,12 @@ const { db, UPLOAD_DIR, getSettings } = require('./db');
 // ------------------------------------------------------------------ field positions
 // Coordinates are PDF points from the top-left of the page (as pdftotext reports them).
 // `line` is the bottom of the printed underline; text sits just above it.
-// They were measured on the templates whose SHA-256 is listed; another file with the same layout works too,
-// and the admin page warns when an uploaded file differs.
+// They were measured on the templates whose SHA-256 is listed. Any other file (a replaced version, or a
+// document without measured positions) has its underscore blanks found automatically instead, and the admin
+// says what each one is for, as for any other agreement.
 const KINDS = {
   advisory: {
-    title: 'Advisory Agreement', role: 'advisor', pages: 6,
+    title: 'Advisory Agreement', role: 'advisor', pages: 6, group: null,
     sha256: '891e8dd2ee19def180d14ff6ed2ca0e2c2cb2d6dc758384fc2106f6906d01c18',
     fields: [
       { key: 'date_day', page: 1, x: 115.5, w: 30.8, line: 171.8, src: 'auto', align: 'center', label: 'Day' },
@@ -41,7 +43,7 @@ const KINDS = {
     ],
   },
   term_sheet: {
-    title: 'Investor Term Sheet', role: 'investor', pages: 9,
+    title: 'Investor Term Sheet', role: 'investor', pages: 9, group: 'instrument',
     sha256: 'c1f3cd89185ca98c1a35c2a5d9fc770dae9b3e9f38d067e33fad258e3fc6009e',
     fields: [
       { key: 'date_day', page: 1, x: 453.7, w: 30.9, line: 188.6, src: 'auto', align: 'center', label: 'Day' },
@@ -72,12 +74,23 @@ const KINDS = {
   },
 };
 
-// Which built-in documents each role must sign to become permanent.
-const ROLE_KINDS = { advisor: ['advisory', 'term_sheet'], investor: ['term_sheet'] };
-const kindsForRole = (role) => ROLE_KINDS[role] || ROLE_KINDS.advisor;
+// Documents with no measured positions: their blanks are always found automatically.
+KINDS.shareholder_loan = { title: 'Shareholder Loan Agreement', role: 'investor', group: 'instrument' };
+KINDS.convertible_note = { title: 'Convertible Debt Note Agreement', role: 'investor', group: 'instrument' };
+
+// A group is "sign any one of these".
+const GROUPS = {
+  instrument: { title: 'Investment agreement', kinds: ['term_sheet', 'shareholder_loan', 'convertible_note'] },
+};
+// What each role must sign to become permanent: a document, or one document from a group.
+const ROLE_REQS = { advisor: ['advisory', 'instrument'], investor: ['instrument'] };
 // STEAM-IE shareholders (share swap) will get their own onboarding agreement later; until the admin sends
 // one, nothing is shared with them for signing.
-const kindsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : kindsForRole(user.role));
+const reqsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : (ROLE_REQS[user.role] || ROLE_REQS.advisor));
+const expand = (req) => (GROUPS[req] ? GROUPS[req].kinds : [req]);
+const kindsFor = (user) => reqsFor(user).flatMap(expand);
+const kindsForRole = (role) => (ROLE_REQS[role] || ROLE_REQS.advisor).flatMap(expand);
+const groupOf = (kind) => (KINDS[kind] && KINDS[kind].group) || null;
 const TICKETS = { 1: 'Option 1: Rs. 6,00,000', 2: 'Option 2: Rs. 12,00,000' };
 const CONSENT = 'I have read this document in full. I agree to fill it in and sign it electronically, and I accept that my electronic signature is as binding as a handwritten one. I understand that VINC Global records the date and time, the place I enter, my IP address and device, and my location if I choose to share it.';
 
@@ -153,58 +166,51 @@ function titleOf(agOrTpl) {
   return (t && t.title) || 'Agreement';
 }
 
-/** Find every run of 3+ underscores in a PDF, with the nearby text as a hint of what it is for. */
-async function detectBlanks(buf) {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, disableFontFace: true, verbosity: 0 }).promise;
-  const out = [];
-  // Where a blank sits inside a longer run of text, place it using real letter widths (Helvetica metrics),
-  // which is far closer than counting characters.
-  const metrics = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
-  const widthOf = (t) => { try { return metrics.widthOfTextAtSize(pdfSafe(t), 10); } catch { return t.length * 5; } };
-  for (let n = 1; n <= doc.numPages; n++) {
-    const page = await doc.getPage(n);
-    const H = page.getViewport({ scale: 1 }).height;
-    const items = (await page.getTextContent()).items.filter((i) => i.str && i.str.trim());
-    const notBlank = (s) => s.replace(/_+/g, '').trim();
-    for (const it of items) {
-      const re = /_{3,}/g; let m;
-      while ((m = re.exec(it.str))) {
-        const base = it.transform[5];
-        const full = widthOf(it.str) || 1;
-        const x = it.transform[4] + it.width * (widthOf(it.str.slice(0, m.index)) / full), w = it.width * (widthOf(m[0]) / full);
-        // Hint: words just before it on the same line, else the label just above it in the same column.
-        let hint = notBlank(it.str.slice(0, m.index));
-        if (!hint) {
-          const left = items.filter((o) => o !== it && Math.abs(o.transform[5] - base) < 2 && o.transform[4] + o.width <= x + 1 && x - (o.transform[4] + o.width) < 40 && notBlank(o.str))
-            .sort((a, b) => b.transform[4] - a.transform[4]);
-          if (left[0]) hint = notBlank(left[0].str);
-        }
-        if (!hint) {
-          const above = items.filter((o) => o.transform[5] > base + 2 && o.transform[5] - base < 24 && o.transform[4] >= x - 6 && o.transform[4] < x + w && notBlank(o.str))
-            .sort((a, b) => a.transform[5] - b.transform[5] || a.transform[4] - b.transform[4]);
-          if (above[0]) hint = notBlank(above[0].str);
-        }
-        out.push({ id: out.length + 1, page: n, x: +x.toFixed(1), w: +Math.max(12, w).toFixed(1), line: +(H - base + 3).toFixed(1), hint: hint.slice(-48) });
-      }
-    }
-  }
-  return { pages: doc.numPages, blanks: out };
+/**
+ * Find every run of 3+ underscores in a PDF (see server/blanks.js). It runs in a worker thread with a time
+ * and memory limit, so an unusual or damaged PDF can never stop the portal itself.
+ */
+function detectBlanks(buf, { timeoutMs = 60000 } = {}) {
+  const { Worker } = require('node:worker_threads');
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn, v) => { if (settled) return; settled = true; clearTimeout(timer); w.terminate().catch(() => {}); fn(v); };
+    const w = new Worker(path.join(__dirname, 'blanks-worker.js'), { workerData: buf, resourceLimits: { maxOldGenerationSizeMb: 768 } });
+    const timer = setTimeout(() => done(reject, new Error('Reading the PDF took too long.')), timeoutMs);
+    w.once('message', (m) => (m && m.error ? done(reject, new Error(m.error)) : done(resolve, m.result)));
+    w.once('error', (e) => done(reject, e));
+    w.once('exit', (code) => done(reject, new Error(`The PDF reader stopped (code ${code}).`)));
+  });
 }
 
 /** A first guess at each blank's purpose; the admin confirms or changes it. */
 function suggestMode(hint) {
   const h = String(hint || '').toLowerCase();
   if (/signature|signed by/.test(h)) return 'skip';
+  if (/made on this|this\s*$|day of$|^dated|^on this/.test(h)) return 'date';   // "made on this ___ day of ___"
   if (/^date|date:$|dated/.test(h)) return 'skip';
   if (/^place/.test(h)) return 'skip';
   return 'member';
 }
 
-/** The fields a document has: measured ones for the two standard documents, configured blanks for custom ones. */
+const tplOf = (agOrTpl) => (agOrTpl.ref === undefined ? agOrTpl : templateOf(agOrTpl));   // agreements have a ref
+
+/**
+ * Does this document use blanks found in the PDF (and set up by the admin) rather than measured positions?
+ * True for custom agreements, for documents without measured positions, and for any replaced file.
+ */
+function usesBlanks(t, kind = t && t.kind) {
+  if (kind === 'custom' || !KINDS[kind] || !KINDS[kind].fields) return true;
+  return !!(t && t.fields);
+}
+const blanksMode = (agOrTpl) => usesBlanks(tplOf(agOrTpl), agOrTpl.kind);
+/** A template can be signed once its blanks are set up (measured documents are always ready). */
+const isReady = (t) => !!t && (t.ready === undefined || t.ready === null || t.ready === 1);
+
+/** The fields a document has: measured positions, or the blanks the admin set up. */
 function fieldsOf(agOrTpl) {
-  if (agOrTpl.kind !== 'custom') return KINDS[agOrTpl.kind].fields;
-  const t = agOrTpl.ref === undefined ? agOrTpl : templateOf(agOrTpl);
+  const t = tplOf(agOrTpl);
+  if (!usesBlanks(t, agOrTpl.kind)) return KINDS[agOrTpl.kind].fields;
   const blanks = t && t.fields ? JSON.parse(t.fields) : [];
   const out = [];
   for (const b of blanks) {
@@ -226,7 +232,7 @@ function fieldsOf(agOrTpl) {
 function validateFields(ag, input) {
   const v = (k, max = 80) => String((input && input[k]) || '').replace(/\s+/g, ' ').trim().slice(0, max);
   const errors = [];
-  if (ag.kind === 'custom') {
+  if (blanksMode(ag)) {
     const f = {};
     for (const fd of fieldsOf(ag).filter((x) => x.src === 'member' && !x.type && !x.placeOf)) {
       f[fd.key] = v(fd.key, 120);
@@ -277,7 +283,7 @@ function values(ag, opts = {}) {
       company_date: istDateTime(ag.company_signed_at), company_place: ag.company_place,
     });
   }
-  if (ag.kind === 'custom') {
+  if (blanksMode(ag)) {
     for (const fd of fieldsOf(ag)) {
       if (fd.src === 'fixed') out[fd.key] = fd.value;
       else if (fd.mode === 'member_name') out[fd.key] = memberName;
@@ -336,8 +342,8 @@ async function buildPdf(ag, { withCompany = false, certificate = false } = {}) {
     page.drawText(text, { x, y: H - fd.line + 3.4, size, font, color: ink });
   }
 
-  // Custom documents get a signature page after their own pages.
-  if (ag.kind === 'custom') await addSignaturePage(pdf, ag, { font, bold, withCompany, vals });
+  // Documents set up from their blanks get a signature page after their own pages.
+  if (blanksMode(ag)) await addSignaturePage(pdf, ag, { font, bold, withCompany, vals });
 
   if (certificate) {
     const all = pdf.getPages();
@@ -487,6 +493,28 @@ function logEvent(agreementId, actor, action, detail, ip) {
 function activeTemplate(kind) {
   return db.prepare('SELECT * FROM agreement_templates WHERE kind = ? AND active = 1 ORDER BY id DESC LIMIT 1').get(kind) || null;
 }
+/** The current version of a standard document, if it is uploaded and its blanks are set up. */
+function readyTemplate(kind) {
+  const t = activeTemplate(kind);
+  return isReady(t) ? t : null;
+}
+
+/**
+ * A standard document uploaded before blanks were found automatically, whose file differs from the measured
+ * one, is switched to blanks found in the file (the admin then sets them up).
+ */
+async function prepareStandard(t) {
+  if (!t || t.kind === 'custom' || t.fields || !KINDS[t.kind] || !KINDS[t.kind].fields || t.sha256 === KINDS[t.kind].sha256) return t;
+  let blanks = [];
+  try { blanks = (await detectBlanks(fs.readFileSync(filePath(t.stored_name)))).blanks; } catch (e) { console.error('[agreements] blank detection failed', e.message); }
+  db.prepare('UPDATE agreement_templates SET fields = ?, ready = 0 WHERE id = ?').run(JSON.stringify(suggestBlanks(blanks)), t.id);
+  return templateById(t.id);
+}
+
+/** Blanks as found, with a first guess at what each is for. */
+function suggestBlanks(blanks) {
+  return blanks.map((b) => ({ ...b, mode: suggestMode(b.hint), label: (b.hint || '').replace(/[\s:.-]+$/, '') || `Blank ${b.id}`, value: '' }));
+}
 
 function openAgreement(userId, kind, templateId) {
   if (kind === 'custom') return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND template_id = ? AND status != 'void' ORDER BY id DESC LIMIT 1").get(userId, templateId) || null;
@@ -504,21 +532,65 @@ function createAgreement(user, tpl, actor) {
 
 /** Make sure a member has an open agreement for a standard document (kind) or a custom one (template). */
 function ensureFor(user, kindOrTemplate, actor = 'System') {
-  const tpl = typeof kindOrTemplate === 'object' ? kindOrTemplate : activeTemplate(kindOrTemplate);
+  const tpl = typeof kindOrTemplate === 'object' ? kindOrTemplate : readyTemplate(kindOrTemplate);
   if (!tpl) return { agreement: null, created: false };
   const existing = openAgreement(user.id, tpl.kind, tpl.id);
   if (existing) return { agreement: existing, created: false };
   return { agreement: createAgreement(user, tpl, actor), created: true };
 }
 
-/** All standard documents the member's role requires (those whose PDF has been uploaded). */
+/** Has the member already signed (or had executed) one document of this set? */
+function chosenIn(userId, kinds) {
+  if (!kinds.length) return null;
+  return db.prepare(`SELECT * FROM agreements WHERE user_id = ? AND kind IN (${kinds.map(() => '?').join(',')}) AND status IN ('member_signed','executed') ORDER BY id DESC LIMIT 1`)
+    .get(userId, ...kinds) || null;
+}
+
+/**
+ * All standard documents the member's role requires (those uploaded and set up). For "one of" groups, every
+ * choice is offered until the member signs one.
+ */
 function ensureRole(user, actor = 'System') {
   const created = [];
-  for (const kind of kindsFor(user)) {
-    const r = ensureFor(user, kind, actor);
-    if (r.created) created.push(r.agreement);
+  for (const req of reqsFor(user)) {
+    const kinds = expand(req);
+    if (GROUPS[req] && chosenIn(user.id, kinds)) continue;
+    for (const kind of kinds) {
+      const r = ensureFor(user, kind, actor);
+      if (r.created) created.push(r.agreement);
+    }
   }
   return created;
+}
+
+/** Once a member signs one document of a group, the other choices are no longer needed. */
+function closeSiblings(ag, ip) {
+  const g = groupOf(ag.kind);
+  if (!g) return 0;
+  const others = GROUPS[g].kinds.filter((k) => k !== ag.kind);
+  const open = db.prepare(`SELECT * FROM agreements WHERE user_id = ? AND status = 'pending' AND kind IN (${others.map(() => '?').join(',')})`).all(ag.user_id, ...others);
+  for (const a of open) {
+    db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(`${NOT_NEEDED} you chose the ${titleOf(ag)}`, Date.now(), a.id);
+    logEvent(a.id, 'System', 'Withdrawn', `member chose the ${titleOf(ag)}`, ip);
+  }
+  return open.length;
+}
+const NOT_NEEDED = 'Not needed:';
+
+/** "Advisory Agreement and one of: Investor Term Sheet, Shareholder Loan Agreement or Convertible Debt Note Agreement" */
+function describe(rows) {
+  const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}` : a[0] || '');
+  const or = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} or ${a[a.length - 1]}` : a[0] || '');
+  const parts = [], seen = new Set();
+  for (const r of rows) {
+    const g = groupOf(r.kind);
+    if (!g) { parts.push(titleOf(r)); continue; }
+    if (seen.has(g)) continue;
+    seen.add(g);
+    const titles = [...new Set(rows.filter((x) => groupOf(x.kind) === g).map((x) => titleOf(x)))];
+    parts.push(titles.length > 1 ? `one of: ${or(titles)}` : titles[0]);
+  }
+  return and(parts);
 }
 
 function companySettings() {
@@ -557,18 +629,32 @@ function requiredDone(userId) {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   if (!user) return false;
   const rows = db.prepare("SELECT kind, status, mandatory FROM agreements WHERE user_id = ? AND status != 'void'").all(userId);
-  const required = rows.filter((r) => r.mandatory);
-  if (!required.length) return false;
-  for (const kind of kindsFor(user)) {
-    if (activeTemplate(kind) && !rows.some((r) => r.kind === kind && r.status === 'executed')) return false;
+  const executed = (kinds) => rows.some((r) => kinds.includes(r.kind) && r.status === 'executed');
+  let anything = false;
+  // What the role requires: each document, or one document of each group (counting only those set up).
+  for (const req of reqsFor(user)) {
+    const kinds = expand(req).filter((k) => readyTemplate(k));
+    if (!kinds.length) continue;
+    anything = true;
+    if (!executed(kinds)) return false;
   }
-  return required.every((r) => r.status === 'executed');
+  // Everything else sent to them as required, except unchosen alternatives of a group already satisfied.
+  for (const r of rows.filter((x) => x.mandatory)) {
+    anything = true;
+    if (r.status === 'executed') continue;
+    const g = groupOf(r.kind);
+    if (g && executed(GROUPS[g].kinds)) continue;
+    return false;
+  }
+  return anything;
 }
 
 function publicAgreement(ag, { admin = false } = {}) {
   if (!ag) return null;
   const out = {
     id: ag.id, ref: ag.ref, kind: ag.kind, template_id: ag.template_id, title: titleOf(ag), status: ag.status, mandatory: !!ag.mandatory,
+    group: groupOf(ag.kind), group_title: groupOf(ag.kind) ? GROUPS[groupOf(ag.kind)].title : null,
+    updating: ag.status === 'pending' && !isReady(templateOf(ag)),
     fields: ag.fields ? JSON.parse(ag.fields) : null,
     member_signed_at: ag.member_signed_at, member_place: ag.member_place,
     company_signed_at: ag.company_signed_at, company_place: ag.company_place, company_signer: ag.company_signer, company_method: ag.company_method,
@@ -579,7 +665,8 @@ function publicAgreement(ag, { admin = false } = {}) {
 }
 
 module.exports = {
-  KINDS, MODES, TICKETS, CONSENT, kindsForRole, kindsFor, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  KINDS, GROUPS, MODES, TICKETS, CONSENT, NOT_NEEDED, kindsForRole, kindsFor, reqsFor, expand, groupOf, chosenIn, closeSiblings, describe,
+  usesBlanks, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

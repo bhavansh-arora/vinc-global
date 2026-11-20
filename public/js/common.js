@@ -15,7 +15,8 @@
     let data = null;
     try { data = await res.json(); } catch { /* not JSON */ }
     if (!res.ok) {
-      const err = new Error((data && data.error) || `Request failed (${res.status}).`);
+      const busy = [502, 503, 504].includes(res.status);
+      const err = new Error((data && data.error) || (busy ? 'The server is restarting or busy. Please wait a few seconds and try again.' : `Request failed (${res.status}).`));
       err.status = res.status; err.data = data;
       throw err;
     }

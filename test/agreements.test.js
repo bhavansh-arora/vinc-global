@@ -13,6 +13,10 @@ process.env.DATA_DIR = DATA;
 process.env.MAIL_TRANSPORT = 'json';
 process.env.ADMIN_EMAIL = 'founder@example.com';
 const app = require('../server/index.js');
+const AGM = require('../server/agreements.js');
+// The real agreements are not in this public repository. Generated stand-ins are registered as the files the
+// positions were measured on, so the measured path is what these tests exercise.
+const asMeasured = (kind, buf) => { AGM.KINDS[kind].sha256 = require('node:crypto').createHash('sha256').update(buf).digest('hex'); return buf; };
 const mail = require('../server/mailer.js');
 
 let server, base;
@@ -57,11 +61,15 @@ test('advisor signs, admin countersigns, advisor becomes permanent', async () =>
   const admin = client(), adv = client(), other = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
 
-  // Wrong page count is refused; the 6-page advisory agreement is accepted
-  assert.equal((await upload(admin, 'advisory', await pdfWithPages(3))).status, 400);
-  const tpl = await upload(admin, 'advisory', await pdfWithPages(6));
+  // A file that is not the measured one is accepted, but waits for its blanks to be set up
+  const otherFile = await upload(admin, 'advisory', await pdfWithPages(3));
+  assert.equal(otherFile.status, 200);
+  assert.equal(otherFile.body.needs_setup, true);
+  assert.equal(otherFile.body.ready, false);
+  const tpl = await upload(admin, 'advisory', asMeasured('advisory', await pdfWithPages(6)));
+  assert.equal(tpl.body.needs_setup, false);
   assert.equal(tpl.status, 200);
-  assert.equal(tpl.body.matches_layout, false, 'a different file than the measured one is flagged');
+  assert.equal(tpl.body.layout, 'measured');
 
   // A temporary advisor sees their agreement ready to sign
   const gen = await admin('POST', '/api/admin/users', { role: 'advisor', name: 'Asha Rao', email: 'asha@example.com', password: 'Secret123', access: 'temporary' });
@@ -130,7 +138,7 @@ test('advisor signs, admin countersigns, advisor becomes permanent', async () =>
 test('with automatic countersigning, an investor is permanent as soon as they sign', async () => {
   const admin = client(), inv = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
-  await upload(admin, 'term_sheet', await pdfWithPages(9));
+  await upload(admin, 'term_sheet', asMeasured('term_sheet', await pdfWithPages(9)));
   const auto = await admin('PUT', '/api/admin/agreements/company', { auto: true, place: 'Bengaluru' });
   assert.equal(auto.body.auto, true);
   const gen = await admin('POST', '/api/admin/users', { role: 'investor', name: 'Neha Gupta', email: 'neha@example.com', password: 'Secret123', access: 'temporary' });

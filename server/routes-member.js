@@ -60,7 +60,7 @@ r.get('/overview', (req, res) => {
       const AGM = require('./agreements');
       AGM.ensureRole(u);
       return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY mandatory DESC, id").all(u.id)
-        .map((a) => ({ kind: a.kind, title: AGM.titleOf(a), status: a.status, mandatory: !!a.mandatory }));
+        .map((a) => ({ kind: a.kind, title: AGM.titleOf(a), status: a.status, mandatory: !!a.mandatory, group: AGM.groupOf(a.kind), updating: AGM.publicAgreement(a).updating }));
     })(),
   });
 });

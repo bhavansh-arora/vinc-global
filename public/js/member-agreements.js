@@ -21,7 +21,7 @@
     el.innerHTML = `<div class="section-title"><div><h2>Your agreements</h2>
         <p>${me.access_type === 'permanent' || (d.steam_ie && !d.agreements.length) ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
       ${d.waiting_for_template ? `<div class="card">${emptyHtml(d.steam_ie ? 'Your onboarding agreement for the STEAM-IE share swap is being prepared. It will appear here, and you will get an email when it is ready to sign.' : 'The VINC team is preparing your agreement. It will appear here, and you will get an email when it is ready.')}</div>` : ''}
-      <div class="grid" style="gap:16px">${d.agreements.map(card).join('')}</div>
+      ${listHtml(d)}
       <div class="card agr-note"><h3>How signing works</h3>
         <ol class="agr-how">
           <li><b>Fill in the blanks</b> directly on the document, or in the panel beside it.</li>
@@ -36,24 +36,53 @@
     }));
   }
 
-  function requiredNames(list) {
-    const names = list.filter((a) => a.mandatory).map((a) => a.title);
-    return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || '';
+  // Standalone documents first, then each "sign any one of these" group in its own panel.
+  function listHtml(d) {
+    const single = d.agreements.filter((a) => !a.group);
+    const groups = [...new Set(d.agreements.filter((a) => a.group).map((a) => a.group))];
+    let html = `<div class="grid" style="gap:16px">${single.map((a) => card(a)).join('')}</div>`;
+    for (const g of groups) {
+      const items = d.agreements.filter((a) => a.group === g);
+      const chosen = items.find((a) => a.status !== 'pending');
+      html += items.length > 1 && !chosen
+        ? `<section class="agr-choice"><div class="agr-choice-head"><span class="agr-or">Choose one</span>
+            <div><h3>${VG.esc((d.groups && d.groups[g] && d.groups[g].title) || 'Choose one')}: sign any one of these ${items.length}</h3>
+            <p class="muted small">Pick the one that matches how you are investing. When you sign it, the others are withdrawn.</p></div></div>
+            <div class="grid" style="gap:12px">${items.map((a) => card(a, true)).join('')}</div></section>`
+        : `<div class="grid" style="gap:16px">${items.map((a) => card(a)).join('')}</div>`;
+    }
+    return html;
   }
+
+  /** "Advisory Agreement and one of: Investor Term Sheet, Shareholder Loan Agreement or Convertible Debt Note Agreement" */
+  function describe(list) {
+    const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}` : a[0] || '');
+    const or = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} or ${a[a.length - 1]}` : a[0] || '');
+    const parts = [], seen = new Set();
+    for (const a of list) {
+      if (!a.group) { parts.push(a.title); continue; }
+      if (seen.has(a.group)) continue;
+      seen.add(a.group);
+      const titles = list.filter((x) => x.group === a.group).map((x) => x.title);
+      parts.push(titles.length > 1 ? `one of: ${or(titles)}` : titles[0]);
+    }
+    return and(parts);
+  }
+  function requiredNames(list) { return describe(list.filter((a) => a.mandatory)); }
 
   function emptyHtml(text) { return `<div class="empty">${VG.icon.file}<p>${VG.esc(text)}</p></div>`; }
 
-  function card(a) {
-    const [label, cls] = STATUS[a.status] || [a.status, ''];
+  function card(a, inChoice) {
+    const [label, cls] = a.updating ? ['Being updated by VINC', ''] : (STATUS[a.status] || [a.status, '']);
     return `<article class="card agr-card ${a.status}">
       <span class="agr-ic">${VG.icon.file}</span>
       <div class="agr-main"><p class="label" style="margin:0 0 4px">${VG.esc(a.ref)}</p><h3 style="margin:0 0 6px">${VG.esc(a.title)}</h3>
-        <div class="btn-row" style="gap:8px"><span class="chip ${cls}"><span class="dot"></span>${label}</span>${a.mandatory ? '<span class="chip">Required</span>' : '<span class="chip">Optional</span>'}
+        <div class="btn-row" style="gap:8px"><span class="chip ${cls}"><span class="dot"></span>${label}</span>${inChoice ? '<span class="chip plum">Option</span>' : a.mandatory ? '<span class="chip">Required</span>' : '<span class="chip">Optional</span>'}
           ${a.member_signed_at ? `<span class="muted small">You signed ${VG.dateTime(a.member_signed_at)}${a.member_place ? ', ' + VG.esc(a.member_place) : ''}</span>` : ''}
           ${a.company_signed_at ? `<span class="muted small">· VINC signed ${VG.dateTime(a.company_signed_at)}</span>` : ''}</div>
         ${a.last_void_reason && a.status === 'pending' ? `<p class="small" style="margin:8px 0 0;color:var(--bad)">The team asked you to sign again: ${VG.esc(a.last_void_reason)}</p>` : ''}</div>
       <div class="agr-actions">
-        ${a.status === 'pending' ? `<button class="btn btn-amber" data-open="${a.id}">${VG.icon.spark} Review and sign</button>` : ''}
+        ${a.status === 'pending' && !a.updating ? `<button class="btn ${inChoice ? 'btn-soft' : 'btn-amber'}" data-open="${a.id}">${VG.icon.spark} ${inChoice ? 'Choose and sign' : 'Review and sign'}</button>` : ''}
         ${a.status === 'executed' ? `<button class="btn btn-soft btn-sm" data-view-pdf="${a.id}">${VG.icon.eye} View</button><a class="btn btn-primary btn-sm" href="/api/member/agreements/${a.id}/document?download=1">${VG.icon.download} Download PDF</a>` : ''}
       </div></article>`;
   }
@@ -65,7 +94,8 @@
     try { d = await VG.api(`/api/member/agreements/${id}`); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const ag = d.agreement;
     if (ag.status !== 'pending') { location.hash = '#agreements'; return; }
-    const isTS = ag.kind === 'term_sheet';
+    if (ag.updating) { el.innerHTML = `<div class="card">${emptyHtml('VINC is updating this document. Please check back shortly; you will be able to sign it here.')}</div>`; return; }
+    const isTS = ag.kind === 'term_sheet' && !d.spec.custom;
     const custom = !!d.spec.custom;
     const customFields = custom ? d.spec.fields.filter((f) => f.src === 'member' && !f.type && !f.placeOf) : [];
     const state = {
@@ -243,5 +273,5 @@
 
   function pick(o, keys) { const r = {}; for (const k of keys) if (o && o[k] != null) r[k] = o[k]; return r; }
 
-  VG.memberAgreements = { render };
+  VG.memberAgreements = { render, describe };
 })();

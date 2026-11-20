@@ -317,10 +317,12 @@
 
   function agreementBanner() {
     const list = data.agreements || [];
-    const pendingAll = list.filter((a) => a.status === 'pending' && a.mandatory !== false);
-    const pending = pendingAll[0] || list.find((a) => a.status === 'pending');
-    const names = (pendingAll.length ? pendingAll : list.filter((a) => a.status === 'pending')).map((a) => a.title);
-    const nameText = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    const open = list.filter((a) => a.status === 'pending' && !a.updating);
+    const pendingAll = open.filter((a) => a.mandatory !== false);
+    const pending = pendingAll[0] || open[0];
+    const shown = pendingAll.length ? pendingAll : open;
+    const names = shown.map((a) => a.title);
+    const nameText = VG.memberAgreements && VG.memberAgreements.describe ? VG.memberAgreements.describe(shown) : names.join(' and ');
     const waiting = list.find((a) => a.status === 'member_signed');
     if (pending) {
       return `<a class="card agr-banner" href="#agreements">

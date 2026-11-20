@@ -19,7 +19,7 @@
     approvals: ['Approvals', 'New sign-ups and renewal requests'],
     requests: ['ID requests', 'People who asked for a VINC ID on the website'],
     members: ['Members & IDs', 'Generate IDs for advisors and investors'],
-    agreements: ['Agreements', 'Advisory agreements and term sheets · sign, countersign, track'],
+    agreements: ['Agreements', 'Onboarding agreements · sign, countersign, track'],
     documents: ['Documents', 'Publish PDFs, Excel sheets and links · view only for members'],
     news: ['News', 'Publish updates to members or the public site'],
     kyc: ['KYC review', 'Verify member documents'],

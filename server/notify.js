@@ -201,10 +201,11 @@ function idRequested(r) {
 
 // ---------------------------------------------------------------- agreements
 function agreementReady(u, title) {
+  const many = / and |one of/.test(title);      // e.g. "Advisory Agreement and one of: ..."
   return mail.send({
-    to: u.email, kind: 'agreement', subject: `Please sign your ${title}`,
-    title: `Your ${title} is ready to sign`, greeting: `Hello ${first(u)},`,
-    lines: [`Your ${title} with VINC DEEPTECH PRIVATE LIMITED is ready in VINC Global.`,
+    to: u.email, kind: 'agreement', subject: many ? 'Your VINC agreements are ready to sign' : `Please sign your ${title}`,
+    title: many ? 'Your agreements are ready to sign' : `Your ${title} is ready to sign`, greeting: `Hello ${first(u)},`,
+    lines: [many ? `Please sign your ${title}, with VINC DEEPTECH PRIVATE LIMITED, in VINC Global.` : `Your ${title} with VINC DEEPTECH PRIVATE LIMITED is ready in VINC Global.`,
       'Fill in your details, sign it on screen and you become a permanent member of the VINC circle once it is countersigned.'],
     button: { text: `Review and sign`, path: '/advisor#agreements' },
   });

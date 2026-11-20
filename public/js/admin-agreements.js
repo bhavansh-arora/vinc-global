@@ -22,11 +22,13 @@
     try { d = await VG.api('/api/admin/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const toSign = d.rows.filter((r) => r.status === 'member_signed').length;
     el.innerHTML = `<div class="section-title"><div><h2>Onboarding agreements</h2>
-        <p>Advisors sign the Advisory Agreement <b>and</b> the Investor Term Sheet; investors sign the Investor Term Sheet. STEAM-IE shareholders (share swap) get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
+        <p>Advisors sign the Advisory Agreement <b>and</b> one investment agreement; investors sign one investment agreement. The investment agreements are the Investor Term Sheet, the Shareholder Loan Agreement and the Convertible Debt Note Agreement: members see all three and sign whichever fits. STEAM-IE shareholders get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
       <div class="grid grid-2" style="align-items:start">
         <div class="card"><div class="card-head"><h3>Documents</h3></div>
-          <p class="muted small" style="margin-top:-6px">Upload each PDF once. It is stored privately on the server and shown to members to fill in and sign.</p>
-          <div class="grid" style="gap:12px">${d.templates.map(templateCard).join('')}</div></div>
+          <p class="muted small" style="margin-top:-6px">Upload each PDF once. It is stored privately on the server and shown to members to fill in and sign. When you upload a new version, its blanks are found automatically and you choose what each one is for.</p>
+          <div class="grid" style="gap:12px">${d.templates.filter((t) => !t.group).map(templateCard).join('')}</div>
+          <div class="tpl-group"><p class="label" style="margin:0 0 2px">Investment agreements</p><p class="muted small" style="margin:0 0 10px">Advisors and investors sign any one of these.</p>
+            <div class="grid" style="gap:12px">${d.templates.filter((t) => t.group).map(templateCard).join('')}</div></div></div>
         <div class="card" id="company-card">${companyCard(d.company)}</div>
       </div>
       <div class="card" id="custom-card"><div class="card-head"><h3>Other agreements</h3><button type="button" class="btn btn-primary btn-sm" id="custom-new">${VG.icon.plus} Upload an agreement</button></div>
@@ -51,10 +53,17 @@
       card.classList.add('busy');
       try {
         const t = await VG.api(`/api/admin/agreements/templates/${inp.dataset.upload}`, { method: 'POST', form: fd });
-        VG.toast(`${t.title} uploaded.${t.matches_layout ? '' : ' Note: this file differs from the version the blanks were measured on; check a preview after the first signing.'}`, t.matches_layout ? 'ok' : 'bad');
-        render(el, ctx);
+        if (t.needs_setup) {
+          VG.toast(t.detect_error ? `${t.title} uploaded, but its blanks could not be read automatically. Members will sign on the signature page added at the end.`
+            : `${t.title} uploaded. Found ${t.blanks} blank${t.blanks === 1 ? '' : 's'}: choose what each one is for.`, t.detect_error ? 'bad' : 'ok');
+          configure(t.id, null, () => render(el, ctx));
+        } else {
+          VG.toast(`${t.title} uploaded. Its blanks are already positioned for this exact file.`, 'ok');
+          render(el, ctx);
+        }
       } catch (e) { VG.toast(e.message, 'bad'); card.classList.remove('busy'); }
     }));
+    $$('[data-setup]', el).forEach((b) => b.addEventListener('click', () => configure(Number(b.dataset.setup), d, () => render(el, ctx))));
     $$('[data-view-tpl]', el).forEach((b) => b.addEventListener('click', () => VG.viewer.open({ kind: 'pdf', title: b.dataset.title, src: `/api/admin/agreements/templates/${b.dataset.viewTpl}/raw` })));
 
     bindCompany(el, d.company);
@@ -65,7 +74,7 @@
       $('#agr-table').innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>Document</th><th>Status</th><th>Member signed</th><th>VINC signed</th><th></th></tr></thead><tbody>
         ${rows.map((r) => `<tr>
           <td><b>${VG.esc(r.user.name || '—')}</b><div class="muted small mono">${VG.esc(r.user.uid)} · ${VG.esc(r.user.member_label || (r.user.role === 'investor' ? 'Investor' : 'Advisor'))}${r.user.access_type === 'permanent' ? ' · permanent' : ''}</div></td>
-          <td>${VG.esc(r.title)} ${r.mandatory ? '' : '<span class="chip" style="font-size:.68rem">Optional</span>'}${r.ref ? `<div class="muted small mono">${VG.esc(r.ref)}</div>` : ''}</td>
+          <td>${VG.esc(r.title)} ${r.group ? '<span class="chip plum" style="font-size:.68rem" title="Members sign any one of the investment agreements">One of 3</span>' : r.mandatory ? '' : '<span class="chip" style="font-size:.68rem">Optional</span>'}${r.ref ? `<div class="muted small mono">${VG.esc(r.ref)}</div>` : ''}</td>
           <td><span class="chip ${STATUS[r.status][1]}"><span class="dot"></span>${STATUS[r.status][0]}</span></td>
           <td class="small">${r.member_signed_at ? `${VG.dateTime(r.member_signed_at)}<div class="muted">${VG.esc(r.member_place || '')}</div>` : '—'}</td>
           <td class="small">${r.company_signed_at ? `${VG.dateTime(r.company_signed_at)}<div class="muted">${VG.esc(r.company_place || '')}${r.company_method === 'auto' ? ' · auto' : ''}</div>` : '—'}</td>
@@ -80,10 +89,12 @@
   function templateCard(t) {
     return `<div class="tpl ${t.uploaded ? 'ok' : ''}">
       <span class="kind pdf" style="width:38px;height:46px;font-size:.6rem;padding-bottom:5px">PDF</span>
-      <div style="flex:1;min-width:0"><b>${VG.esc(t.title)}</b> <span class="chip" style="font-size:.7rem">Required: ${VG.esc(t.required_for)}</span>
-        <div class="muted small">${t.uploaded ? `${VG.esc(t.original_name || '')} · ${t.pages} pages · ${VG.date(t.uploaded_at)}` : 'Not uploaded yet'}</div>
-        ${t.uploaded ? (t.matches_layout ? '<div class="small" style="color:var(--ok)">✓ Blanks positioned for this exact file</div>' : '<div class="small" style="color:var(--warn)">Different file from the one the blanks were measured on</div>') : ''}</div>
-      <div class="btn-row">${t.uploaded ? `<button class="btn btn-soft btn-xs" data-view-tpl="${t.kind}" data-title="${VG.esc(t.title)}">View</button>` : ''}
+      <div class="tpl-main"><b>${VG.esc(t.title)}</b> <span class="chip" style="font-size:.7rem">${t.group ? VG.esc(t.required_for) : `Required: ${VG.esc(t.required_for)}`}</span>
+        <div class="muted small">${t.uploaded ? `${VG.esc(t.original_name || '')} · ${t.pages} page${t.pages === 1 ? '' : 's'} · ${VG.date(t.uploaded_at)}` : 'Not uploaded yet'}</div>
+        ${!t.uploaded ? '' : t.layout === 'measured' ? '<div class="small" style="color:var(--ok)">✓ Blanks positioned for this exact file</div>'
+          : t.ready ? `<div class="small" style="color:var(--ok)">✓ Blanks set up: ${t.used_blanks} of ${t.blanks} in use. Members can sign it.</div>`
+          : `<div class="small tpl-todo">${VG.icon.clock.replace('<svg', '<svg width="13" height="13" style="vertical-align:-2px"')} Set up the blanks${t.blanks ? ` (${t.blanks} found)` : ''} so members can sign it</div>`}</div>
+      <div class="btn-row">${t.uploaded && t.layout === 'blanks' ? `<button class="btn ${t.ready ? 'btn-soft' : 'btn-amber'} btn-xs" data-setup="${t.id}">Set up blanks</button>` : ''}${t.uploaded ? `<button class="btn btn-soft btn-xs" data-view-tpl="${t.kind}" data-title="${VG.esc(t.title)}">View</button>` : ''}
         <label class="btn ${t.uploaded ? 'btn-soft' : 'btn-primary'} btn-xs">${t.uploaded ? 'Replace' : `${VG.icon.upload} Upload`}<input type="file" accept="application/pdf,.pdf" data-upload="${t.kind}" hidden></label></div>
     </div>`;
   }
@@ -265,7 +276,8 @@
       await VG.busy(form.querySelector('[type=submit]'), async () => {
         try {
           const t = await VG.api('/api/admin/agreements/custom', { method: 'POST', form: fd });
-          VG.toast(t.blanks ? `Uploaded. Found ${t.blanks} blank${t.blanks === 1 ? '' : 's'}.` : 'Uploaded. No underscore blanks were found, so members will only sign.', 'ok');
+          VG.toast(t.detect_error ? 'Uploaded, but its blanks could not be read automatically. Members will sign on the signature page added at the end.'
+            : t.blanks ? `Uploaded. Found ${t.blanks} blank${t.blanks === 1 ? '' : 's'}.` : 'Uploaded. No underscore blanks were found, so members will only sign.', t.detect_error ? 'bad' : 'ok');
           form.hidden = true; form.reset(); name.textContent = '';
           configure(t.id, d, () => render(el, ctx));
         } catch (ex) { $('#custom-err', el).textContent = ex.message; }
@@ -294,8 +306,9 @@
       <div class="cfg-grid">
         <div class="cfg-doc" id="cfg-doc"><div class="viewer-loading"><div class="spinner"></div></div></div>
         <div class="cfg-side">
-          <label class="field"><span>Title</span><input class="input" id="cfg-title" value="${VG.esc(t.title)}" maxlength="120"></label>
-          <label class="check" style="margin-bottom:12px"><input type="checkbox" id="cfg-req" ${t.required ? 'checked' : ''}> Required for permanent membership</label>
+          ${t.standard ? `<p class="small cfg-std">${t.ready ? 'Changes apply to copies nobody has signed yet.' : 'Members can sign this document once you save the set-up. Until then it shows as “being updated”.'}</p>`
+            : `<label class="field"><span>Title</span><input class="input" id="cfg-title" value="${VG.esc(t.title)}" maxlength="120"></label>
+          <label class="check" style="margin-bottom:12px"><input type="checkbox" id="cfg-req" ${t.required ? 'checked' : ''}> Required for permanent membership</label>`}
           ${t.blanks_list.length ? `<p class="muted small">Each numbered box on the document is a blank. Say what it is for; anything you leave blank stays empty.</p>
           <div class="cfg-list">${t.blanks_list.map((b) => `<div class="cfg-row" data-id="${b.id}">
               <span class="cfg-n">${b.id}</span>
@@ -305,7 +318,7 @@
                 <input class="input" data-value placeholder="The fixed text to print" value="${VG.esc(b.value || '')}" maxlength="120" ${b.mode === 'company' ? '' : 'hidden'}></div></div>`).join('')}</div>`
             : '<p class="muted">No underscore blanks were found in this PDF. Members will read it and sign; both signatures go on the signature page added at the end.</p>'}
           <p class="form-error" id="cfg-err"></p>
-          <div class="btn-row"><button class="btn btn-primary" type="button" id="cfg-save">Save</button><button class="btn btn-amber" type="button" id="cfg-save-send">Save and send…</button></div>
+          <div class="btn-row"><button class="btn btn-primary" type="button" id="cfg-save">${t.standard ? 'Save and make it ready to sign' : 'Save'}</button>${t.standard ? '' : '<button class="btn btn-amber" type="button" id="cfg-save-send">Save and send…</button>'}</div>
         </div></div></div>`;
     document.body.appendChild(dlg);
     dlg.showModal();
@@ -332,18 +345,18 @@
     });
     setTimeout(() => $$('.cfg-row', dlg).forEach(paintRow), 1500);
     const save = async (thenSend) => {
-      const body = { title: $('#cfg-title', dlg).value, required: $('#cfg-req', dlg).checked,
+      const body = { title: t.standard ? t.title : $('#cfg-title', dlg).value, required: t.standard ? true : $('#cfg-req', dlg).checked,
         blanks: $$('.cfg-row', dlg).map((row) => ({ id: Number(row.dataset.id), mode: row.querySelector('[data-mode]').value, label: row.querySelector('[data-label]').value, value: row.querySelector('[data-value]').value })) };
       if (!t.blanks_list.length) delete body.blanks;
       try {
         const saved = await VG.api(`/api/admin/agreements/custom/${id}`, { method: 'PUT', body });
-        VG.toast('Saved.', 'ok');
+        VG.toast(t.standard ? `Saved. Members can now sign the ${t.title}${saved.offered ? `; ${saved.offered} new cop${saved.offered === 1 ? 'y was' : 'ies were'} sent to active members` : ''}.` : 'Saved.', 'ok');
         dlg.close();
-        if (thenSend) sendDialog(saved, d.members, after);
+        if (thenSend) sendDialog(saved, d && d.members, after);
       } catch (e) { $('#cfg-err', dlg).textContent = e.message; }
     };
     $('#cfg-save', dlg).addEventListener('click', () => VG.busy($('#cfg-save', dlg), () => save(false)));
-    $('#cfg-save-send', dlg).addEventListener('click', () => VG.busy($('#cfg-save-send', dlg), () => save(true)));
+    if (!t.standard) $('#cfg-save-send', dlg).addEventListener('click', () => VG.busy($('#cfg-save-send', dlg), () => save(true)));
   }
 
   // Choose who signs it: a whole group, or selected members.

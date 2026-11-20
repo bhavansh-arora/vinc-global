@@ -62,8 +62,12 @@ function memberList(u) {
   const rows = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY mandatory DESC, id").all(u.id);
   const voided = db.prepare("SELECT kind, template_id, void_reason FROM agreements WHERE user_id = ? AND status = 'void' ORDER BY id DESC").all(u.id);
   return {
-    agreements: rows.map((r) => ({ ...AG.publicAgreement(r), last_void_reason: (voided.find((v) => v.template_id === r.template_id) || {}).void_reason || null })),
-    waiting_for_template: !rows.length && !AG.kindsFor(u).some((k) => AG.activeTemplate(k)),
+    agreements: rows.map((r) => {
+      const v = voided.find((x) => x.template_id === r.template_id && !String(x.void_reason || '').startsWith(AG.NOT_NEEDED));
+      return { ...AG.publicAgreement(r), last_void_reason: (v && v.void_reason) || null };
+    }),
+    groups: Object.fromEntries(Object.entries(AG.GROUPS).map(([k, g]) => [k, { title: g.title, kinds: g.kinds }])),
+    waiting_for_template: !rows.length && !AG.kindsFor(u).some((k) => AG.readyTemplate(k)),
     steam_ie: u.investor_type === 'steam_ie',
     all_executed: AG.requiredDone(u.id),
   };
@@ -76,8 +80,8 @@ member.get('/:id', (req, res) => {
   if (!ag || ag.user_id !== req.user.id || ag.status === 'void') return res.status(404).json({ error: 'Not found.' });
   const u = req.user;
   let prefill = {};
-  if (ag.kind !== 'custom') {
-    const prev = db.prepare("SELECT fields FROM agreements WHERE user_id = ? AND kind != 'custom' AND fields IS NOT NULL ORDER BY id DESC LIMIT 1").get(u.id);
+  if (!AG.blanksMode(ag)) {
+    const prev = db.prepare("SELECT fields FROM agreements WHERE user_id = ? AND kind IN ('advisory','term_sheet') AND fields LIKE '%\"pan\"%' ORDER BY id DESC LIMIT 1").get(u.id);
     prefill = prev ? JSON.parse(prev.fields) : { name: u.name || '', email: u.email || '', phone: u.phone || '' };
   }
   if (ag.status === 'pending') {
@@ -88,7 +92,7 @@ member.get('/:id', (req, res) => {
   const cs = AG.companySettings();
   res.json({
     agreement: AG.publicAgreement(ag),
-    spec: { title: AG.titleOf(ag), pages: tpl.pages, custom: ag.kind === 'custom', fields: AG.fieldsOf(ag) },
+    spec: { title: AG.titleOf(ag), pages: tpl.pages, custom: AG.blanksMode(ag), fields: AG.fieldsOf(ag) },
     prefill, tickets: AG.TICKETS, consent: AG.CONSENT,
     company: { signer: `${cs.signer_name}, ${cs.signer_title}` },
   });
@@ -107,6 +111,10 @@ member.post('/:id/sign', async (req, res) => {
   const ag = agRow(req.params.id);
   if (!ag || ag.user_id !== req.user.id || ag.status === 'void') return res.status(404).json({ error: 'Not found.' });
   if (ag.status !== 'pending') return res.status(409).json({ error: 'This agreement has already been signed.' });
+  if (!AG.isReady(AG.templateById(ag.template_id))) return res.status(409).json({ error: 'VINC is updating this document. Please check back shortly.' });
+  const g = AG.groupOf(ag.kind);
+  const chosen = g && AG.chosenIn(req.user.id, AG.GROUPS[g].kinds);
+  if (chosen) return res.status(409).json({ error: `You have already signed the ${AG.titleOf(chosen)}, so this one is not needed.` });
   const { fields, errors } = AG.validateFields(ag, req.body.fields || {});
   const place = str(req.body.place, 60);
   if (place.length < 2) errors.push('Enter the place where you are signing, for example Bengaluru.');
@@ -122,6 +130,7 @@ member.post('/:id/sign', async (req, res) => {
   db.prepare(`UPDATE agreements SET fields = ?, member_sig = ?, member_signed_at = ?, member_place = ?, member_geo = ?, member_ip = ?, member_ua = ?, status = 'member_signed', updated_at = ? WHERE id = ? AND status = 'pending'`)
     .run(JSON.stringify(fields), sigFile, now, place, geo ? JSON.stringify(geo) : null, req.ip, str(req.get('user-agent') || '', 300), now, ag.id);
   AG.logEvent(ag.id, actor, 'Filled in the details and signed', `place: ${place}${geo ? ', location shared' : ''}`, req.ip);
+  AG.closeSiblings(ag, req.ip);      // the other choices of a "one of" group are no longer needed
   A.logAccess(req.user.id, 'agreement_signed', AG.titleOf(ag));
   if (fields.name) db.prepare("UPDATE users SET name = ?, phone = COALESCE(NULLIF(phone, ''), ?) WHERE id = ?").run(fields.name, fields.phone || null, req.user.id);
 
@@ -141,11 +150,18 @@ member.post('/:id/sign', async (req, res) => {
 });
 
 // ================================================================== admin
+const STANDARD = Object.keys(AG.KINDS);
 function standardInfo(kind) {
   const t = AG.activeTemplate(kind);
-  const base = { kind, title: AG.KINDS[kind].title, required_for: kind === 'term_sheet' ? 'Advisors and investors (not STEAM-IE shareholders)' : 'Advisors' };
+  const g = AG.groupOf(kind);
+  const base = { kind, title: AG.KINDS[kind].title, group: g, required_for: g ? 'Advisors and investors sign one of the three' : 'Advisors' };
   if (!t) return { ...base, uploaded: false };
-  return { ...base, uploaded: true, id: t.id, original_name: t.original_name, pages: t.pages, uploaded_at: t.uploaded_at, sha256: t.sha256, matches_layout: t.sha256 === AG.KINDS[kind].sha256 };
+  const blanks = t.fields ? JSON.parse(t.fields) : [];
+  return {
+    ...base, uploaded: true, id: t.id, original_name: t.original_name, pages: t.pages, uploaded_at: t.uploaded_at, sha256: t.sha256,
+    layout: AG.usesBlanks(t) ? 'blanks' : 'measured', ready: AG.isReady(t),
+    blanks: blanks.length, used_blanks: blanks.filter((b) => b.mode !== 'skip').length,
+  };
 }
 function customInfo(t) {
   const counts = db.prepare(`SELECT status, COUNT(*) AS n FROM agreements WHERE template_id = ? AND status != 'void' GROUP BY status`).all(t.id);
@@ -158,21 +174,27 @@ function customInfo(t) {
   };
 }
 
-admin.get('/', (_req, res) => {
+admin.get('/', async (_req, res) => {
+  for (const kind of STANDARD) await AG.prepareStandard(AG.activeTemplate(kind));   // older replaced files get their blanks found
   const cs = AG.companySettings();
   const members = db.prepare("SELECT * FROM users WHERE role != 'admin' AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
   const rows = [];
   for (const u of members) {
     const ags = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY id").all(u.id);
     for (const a of ags) rows.push({ user: A.publicUser(u), ...AG.publicAgreement(a, { admin: true }) });
-    for (const kind of AG.kindsFor(u)) {
-      if (!ags.some((a) => a.kind === kind)) rows.push({ user: A.publicUser(u), kind, title: AG.KINDS[kind].title, status: 'not_sent', mandatory: true });
+    for (const req of AG.reqsFor(u)) {
+      const kinds = AG.expand(req).filter((k) => AG.readyTemplate(k));
+      if (AG.GROUPS[req] && ags.some((a) => kinds.includes(a.kind))) continue;   // a choice is already in front of them
+      for (const kind of kinds) {
+        if (!ags.some((a) => a.kind === kind)) rows.push({ user: A.publicUser(u), kind, title: AG.KINDS[kind].title, group: AG.groupOf(kind), status: 'not_sent', mandatory: true });
+      }
     }
   }
   const order = { member_signed: 0, pending: 1, not_sent: 2, executed: 3 };
   rows.sort((a, b) => (order[a.status] - order[b.status]) || String(a.user.name || '').localeCompare(String(b.user.name || '')));
   res.json({
-    templates: [standardInfo('advisory'), standardInfo('term_sheet')],
+    templates: STANDARD.map(standardInfo),
+    groups: AG.GROUPS,
     custom: db.prepare("SELECT * FROM agreement_templates WHERE kind = 'custom' AND active = 1 ORDER BY id DESC").all().map(customInfo),
     company: { signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at },
     members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, label: A.memberLabel(u), state: A.accessState(u), access_type: u.access_type })),
@@ -184,24 +206,41 @@ async function readPdf(req, res) {
   if (!req.file) { res.status(400).json({ error: 'Choose the PDF to upload.' }); return null; }
   const buf = fs.readFileSync(up.storedPath(req.file.filename));
   try { const pages = (await PDFDocument.load(buf)).getPageCount(); return { buf, pages }; }
-  catch { up.removeStored(req.file.filename); res.status(400).json({ error: 'This PDF could not be read.' }); return null; }
+  catch (e) {
+    up.removeStored(req.file.filename);
+    const locked = /encrypt/i.test(String(e && e.message));
+    res.status(400).json({ error: locked ? 'This PDF is password-protected. Save a copy without a password and upload that.' : 'This PDF could not be read. Try saving it again as a PDF.' });
+    return null;
+  }
 }
 
-// The two standard documents
+/** Blanks found in the PDF (in a worker thread), or none if it could not be read; never stops the upload. */
+async function findBlanks(buf) {
+  try { return { blanks: AG.suggestBlanks((await AG.detectBlanks(buf)).blanks), error: null }; }
+  catch (e) { console.error('[agreements] blank detection failed:', e.message); return { blanks: [], error: e.message }; }
+}
+
+// The standard documents. The exact files the positions were measured on are ready at once; any other file
+// (a new version, or a document without measured positions) has its blanks found, and the admin sets them up.
 admin.post('/templates/:kind', up.single('pdf'), async (req, res) => {
   const kind = req.params.kind;
   if (!AG.KINDS[kind]) { if (req.file) up.removeStored(req.file.filename); return res.status(404).json({ error: 'Unknown document.' }); }
   const r = await readPdf(req, res); if (!r) return;
-  if (r.pages !== AG.KINDS[kind].pages) {
-    up.removeStored(req.file.filename);
-    return res.status(400).json({ error: `The ${AG.KINDS[kind].title} should have ${AG.KINDS[kind].pages} pages; this file has ${r.pages}. The blanks are placed for the ${AG.KINDS[kind].pages}-page version.` });
-  }
+  const sha = AG.sha256(r.buf);
+  const measured = !!AG.KINDS[kind].fields && sha === AG.KINDS[kind].sha256;
+  const found = measured ? { blanks: [], error: null } : await findBlanks(r.buf);
+  let id;
   tx(() => {
     db.prepare('UPDATE agreement_templates SET active = 0 WHERE kind = ?').run(kind);
-    db.prepare('INSERT INTO agreement_templates (kind, title, stored_name, original_name, sha256, pages, active, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)')
-      .run(kind, AG.KINDS[kind].title, req.file.filename, req.file.originalname.slice(0, 200), AG.sha256(r.buf), r.pages, Date.now());
+    id = db.prepare('INSERT INTO agreement_templates (kind, title, stored_name, original_name, sha256, pages, fields, ready, active, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)')
+      .run(kind, AG.KINDS[kind].title, req.file.filename, req.file.originalname.slice(0, 200), sha, r.pages, measured ? null : JSON.stringify(found.blanks), measured ? 1 : 0, Date.now()).lastInsertRowid;
+    // Copies nobody has signed yet move to the new version.
+    for (const a of db.prepare("SELECT id FROM agreements WHERE kind = ? AND status = 'pending'").all(kind)) {
+      db.prepare('UPDATE agreements SET template_id = ?, updated_at = ? WHERE id = ?').run(id, Date.now(), a.id);
+      AG.logEvent(a.id, 'Admin', 'Document updated to the latest version', req.file.originalname.slice(0, 80), req.ip);
+    }
   });
-  res.json(standardInfo(kind));
+  res.json({ ...standardInfo(kind), needs_setup: !measured, detect_error: found.error });
 });
 
 admin.get('/templates/:kind/raw', (req, res) => {
@@ -215,28 +254,31 @@ admin.post('/custom', up.single('pdf'), async (req, res) => {
   const title = str(req.body.title, 120);
   if (!title || !AG.SAFE.test(title)) { if (req.file) up.removeStored(req.file.filename); return res.status(400).json({ error: 'Give the agreement a title (English letters).' }); }
   const r = await readPdf(req, res); if (!r) return;
-  let found = { blanks: [] };
-  try { found = await AG.detectBlanks(r.buf); } catch (e) { console.error('[agreements] blank detection failed', e.message); }
-  const blanks = found.blanks.map((b) => ({ ...b, mode: AG.suggestMode(b.hint), label: (b.hint || '').replace(/[\s:.-]+$/, '') || `Blank ${b.id}`, value: '' }));
+  const { blanks, error } = await findBlanks(r.buf);
   const info = db.prepare("INSERT INTO agreement_templates (kind, title, stored_name, original_name, sha256, pages, fields, required, active, uploaded_at) VALUES ('custom', ?, ?, ?, ?, ?, ?, ?, 1, ?)")
     .run(title, req.file.filename, req.file.originalname.slice(0, 200), AG.sha256(r.buf), r.pages, JSON.stringify(blanks), req.body.required === 'true' || req.body.required === '1' ? 1 : 0, Date.now());
-  res.json(customDetail(AG.templateById(info.lastInsertRowid)));
+  res.json({ ...customDetail(AG.templateById(info.lastInsertRowid)), detect_error: error });
 });
 
 function customDetail(t) {
-  return { ...customInfo(t), blanks_list: t.fields ? JSON.parse(t.fields) : [], modes: AG.MODES };
+  const standard = t.kind !== 'custom';
+  const info = standard ? { id: t.id, kind: t.kind, title: AG.KINDS[t.kind].title, original_name: t.original_name, pages: t.pages, uploaded_at: t.uploaded_at, required: true } : customInfo(t);
+  return { ...info, standard, ready: AG.isReady(t), blanks_list: t.fields ? JSON.parse(t.fields) : [], modes: AG.MODES };
 }
+// Templates whose blanks the admin sets up: custom agreements, and standard documents without measured positions.
+const setupTemplate = (id) => { const t = AG.templateById(Number(id)); return t && t.active && AG.usesBlanks(t) ? t : null; };
 
 admin.get('/custom/:id', (req, res) => {
-  const t = AG.templateById(Number(req.params.id));
-  if (!t || t.kind !== 'custom') return res.status(404).json({ error: 'Not found.' });
+  const t = setupTemplate(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Not found.' });
   res.json(customDetail(t));
 });
 
 admin.put('/custom/:id', (req, res) => {
-  const t = AG.templateById(Number(req.params.id));
-  if (!t || t.kind !== 'custom') return res.status(404).json({ error: 'Not found.' });
-  const title = req.body.title !== undefined ? str(req.body.title, 120) : t.title;
+  const t = setupTemplate(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Not found.' });
+  const standard = t.kind !== 'custom';
+  const title = standard ? t.title : req.body.title !== undefined ? str(req.body.title, 120) : t.title;
   if (!title || !AG.SAFE.test(title)) return res.status(400).json({ error: 'Give the agreement a title (English letters).' });
   const blanks = t.fields ? JSON.parse(t.fields) : [];
   const incoming = Array.isArray(req.body.blanks) ? req.body.blanks : [];
@@ -252,6 +294,17 @@ admin.put('/custom/:id', (req, res) => {
   }
   const signedAlready = db.prepare("SELECT COUNT(*) AS n FROM agreements WHERE template_id = ? AND status IN ('member_signed','executed')").get(t.id).n;
   if (signedAlready && req.body.blanks) return res.status(409).json({ error: 'Someone has already signed this agreement, so its blanks can no longer change. Upload it again as a new agreement instead.' });
+  if (standard) {
+    // Saving the set-up makes the document ready: members can sign it and new members receive it.
+    db.prepare('UPDATE agreement_templates SET fields = ?, ready = 1 WHERE id = ?').run(JSON.stringify(blanks), t.id);
+    const fresh = AG.templateById(t.id);
+    let offered = 0;
+    for (const u of db.prepare("SELECT * FROM users WHERE role != 'admin' AND status = 'active'").all()) {
+      const created = AG.ensureRole(u, 'Admin');
+      if (created.length) { offered += created.length; notify.agreementReady(u, AG.describe(created)); }
+    }
+    return res.json({ ...customDetail(fresh), offered });
+  }
   const required = req.body.required !== undefined ? (req.body.required ? 1 : 0) : t.required;
   db.prepare('UPDATE agreement_templates SET title = ?, fields = ?, required = ? WHERE id = ?').run(title, JSON.stringify(blanks), required, t.id);
   db.prepare("UPDATE agreements SET mandatory = ? WHERE template_id = ? AND status IN ('pending','member_signed')").run(required, t.id);
@@ -277,6 +330,7 @@ admin.post('/send', (req, res) => {
   const b = req.body || {};
   const tpl = b.template_id ? AG.templateById(Number(b.template_id)) : AG.activeTemplate(b.kind);
   if (!tpl || !tpl.active) return res.status(400).json({ error: b.kind && AG.KINDS[b.kind] ? `Upload the ${AG.KINDS[b.kind].title} first.` : 'Choose an agreement to send.' });
+  if (!AG.isReady(tpl)) return res.status(400).json({ error: `Set up the blanks of the ${AG.titleOf(tpl)} first.` });
   let users;
   const base = "SELECT * FROM users WHERE role != 'admin' AND status NOT IN ('invited','rejected','revoked')";
   if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
@@ -393,8 +447,9 @@ admin.post('/:id/void', (req, res) => {
   db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(reason, Date.now(), ag.id);
   AG.logEvent(ag.id, 'Admin', 'Voided', reason, req.ip);
   const u = userRow(ag.user_id);
-  const tpl = ag.kind === 'custom' ? AG.templateById(ag.template_id) : AG.activeTemplate(ag.kind);
+  const tpl = ag.kind === 'custom' ? AG.templateById(ag.template_id) : AG.readyTemplate(ag.kind);
   if (tpl && tpl.active) AG.ensureFor(u, tpl, 'Admin');       // a fresh copy, ready to sign again
+  AG.ensureRole(u, 'Admin');                                  // and the other choices of its group, if any
   notify.agreementVoided(u, AG.titleOf(ag), reason);
   res.json({ ok: true });
 });
