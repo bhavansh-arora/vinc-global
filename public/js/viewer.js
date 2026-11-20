@@ -37,7 +37,7 @@
 
   function open(opts) {
     if (current) close(true);
-    const { kind, title = 'Document', src, url, sheetSrc, subtitle } = opts;
+    const { kind, title = 'Document', src, url, sheetSrc, subtitle, action } = opts;
     const who = VG.me ? VG.me.uid : '';
     const wmText = `${who} · CONFIDENTIAL · ${new Date().toLocaleDateString('en-IN')}`;
     const el = document.createElement('div');
@@ -51,6 +51,7 @@
           <div style="min-width:0"><b>${VG.esc(title)}</b>${subtitle ? `<div class="muted small" style="line-height:1.2">${VG.esc(subtitle)}</div>` : ''}</div></div>
         <div class="vtools"></div>
         <span class="chip hide-sm" title="View only">${VG.icon.lock.replace('<svg', '<svg width="14" height="14"')} View only</span>
+        ${action ? `<button class="btn btn-amber btn-sm viewer-action" type="button">${action.icon || ''} ${VG.esc(action.label)}</button>` : ''}
         <button class="viewer-close" type="button">${VG.icon.x}<span>Close</span></button>
       </div>
       <div class="viewer-body"><div class="viewer-loading"><div class="spinner"></div><span>Opening…</span></div></div>
@@ -58,6 +59,7 @@
     const body = el.querySelector('.viewer-body');
     const tools = el.querySelector('.vtools');
     el.querySelector('.viewer-close').addEventListener('click', () => close());
+    if (action) el.querySelector('.viewer-action').addEventListener('click', () => { close(true); action.onClick(); });
     el.addEventListener('click', (e) => { if (e.target === el) close(); });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('dragstart', (e) => e.preventDefault());

@@ -280,3 +280,27 @@ test('"Find blanks again" keeps choices for blanks in the same place and blanks 
   assert.equal(hand.label, 'Witness');
   assert.equal(hand.id, 6);
 });
+
+test('members can view each agreement before signing, and their filled copy after', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  await admin('PUT', '/api/admin/agreements/company', { auto: false });
+  const { m } = await member(admin, 'investor', 'Viewing Investor');
+  const list = (await m('GET', '/api/member/agreements')).body.agreements;
+  const loan = list.find((a) => a.kind === 'shareholder_loan');
+  const blank = await m('GET', `/api/member/agreements/${loan.id}/document`);
+  assert.equal(blank.status, 200);
+  assert.equal(blank.body.subarray(0, 5).toString(), '%PDF-');
+  const events = db.prepare('SELECT action FROM agreement_events WHERE agreement_id = ?').all(loan.id).map((e) => e.action);
+  assert.ok(events.includes('Viewed the document'));
+  // Another member cannot view it
+  const { m: other } = await member(admin, 'investor', 'Other Investor');
+  assert.equal((await other('GET', `/api/member/agreements/${loan.id}/document`)).status, 404);
+  // After signing, View shows their own filled copy (with the signature page)
+  const f = (await m('GET', `/api/member/agreements/${loan.id}`)).body.spec.fields;
+  const fill = Object.fromEntries(f.filter((x) => x.src === 'member' && !x.type && !x.placeOf).map((x) => [x.key, 'ABCDE1234F']));
+  assert.equal((await sign(m, loan.id, fill)).status, 200);
+  const filled = await m('GET', `/api/member/agreements/${loan.id}/document`);
+  assert.equal(filled.status, 200);
+  assert.ok((await PDFDocument.load(filled.body)).getPageCount() > (await PDFDocument.load(blank.body)).getPageCount(), 'includes the signature page');
+});

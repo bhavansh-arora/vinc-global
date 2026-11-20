@@ -32,7 +32,12 @@
     $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => { location.hash = `#agreements/${b.dataset.open}`; }));
     $$('[data-view-pdf]', el).forEach((b) => b.addEventListener('click', () => {
       const a = d.agreements.find((x) => String(x.id) === b.dataset.viewPdf);
-      VG.viewer.open({ kind: 'pdf', title: `${a.title} · ${a.ref}`, src: `/api/member/agreements/${a.id}/document` });
+      const toSign = a.status === 'pending';
+      VG.viewer.open({
+        kind: 'pdf', title: `${a.title} · ${a.ref}`, src: `/api/member/agreements/${a.id}/document`,
+        subtitle: toSign ? 'Read it in full before you sign. Nothing is signed by viewing.' : a.status === 'member_signed' ? 'Your signed copy, waiting for VINC to countersign' : 'Signed by both parties',
+        action: toSign ? { label: a.group ? 'Choose and sign' : 'Sign this agreement', icon: VG.icon.spark.replace('<svg', '<svg width="14" height="14"'), onClick: () => { location.hash = `#agreements/${a.id}`; } } : null,
+      });
     }));
   }
 
@@ -82,8 +87,9 @@
           ${a.company_signed_at ? `<span class="muted small">· VINC signed ${VG.dateTime(a.company_signed_at)}</span>` : ''}</div>
         ${a.last_void_reason && a.status === 'pending' ? `<p class="small" style="margin:8px 0 0;color:var(--bad)">The team asked you to sign again: ${VG.esc(a.last_void_reason)}</p>` : ''}</div>
       <div class="agr-actions">
-        ${a.status === 'pending' && !a.updating ? `<button class="btn ${inChoice ? 'btn-soft' : 'btn-amber'}" data-open="${a.id}">${VG.icon.spark} ${inChoice ? 'Choose and sign' : 'Review and sign'}</button>` : ''}
-        ${a.status === 'executed' ? `<button class="btn btn-soft btn-sm" data-view-pdf="${a.id}">${VG.icon.eye} View</button><a class="btn btn-primary btn-sm" href="/api/member/agreements/${a.id}/document?download=1">${VG.icon.download} Download PDF</a>` : ''}
+        ${!a.updating ? `<button class="btn btn-soft ${a.status === 'pending' ? '' : 'btn-sm'}" data-view-pdf="${a.id}" title="Read the full document">${VG.icon.eye} View</button>` : ''}
+        ${a.status === 'pending' && !a.updating ? `<button class="btn ${inChoice ? 'btn-soft' : 'btn-amber'}" data-open="${a.id}">${VG.icon.spark} ${inChoice ? 'Choose and sign' : 'Sign'}</button>` : ''}
+        ${a.status === 'executed' ? `<a class="btn btn-primary btn-sm" href="/api/member/agreements/${a.id}/document?download=1">${VG.icon.download} Download PDF</a>` : ''}
       </div></article>`;
   }
 

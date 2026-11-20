@@ -141,7 +141,8 @@
     const parts = [];
     if (r.status === 'member_signed') parts.push(`<button class="btn btn-amber btn-xs" data-cs="${r.id}">${VG.icon.spark.replace('<svg', '<svg width="13" height="13"')} Review & countersign</button>`);
     if (r.status === 'pending') parts.push(`<button class="btn btn-soft btn-xs" data-send="${r.user.id}" data-kind="${r.kind}" data-tpl="${r.template_id || ''}">Remind</button>`);
-    if (r.status === 'executed') parts.push(`<button class="btn btn-soft btn-xs" data-pdf="${r.id}" data-title="${VG.esc(r.title + ' · ' + r.ref)}">View</button><a class="btn btn-soft btn-xs" href="/api/admin/agreements/${r.id}/pdf?download=1">${VG.icon.download.replace('<svg', '<svg width="13" height="13"')} PDF</a>`);
+    parts.push(`<button class="btn btn-soft btn-xs" data-pdf="${r.id}" data-title="${VG.esc(r.title + ' · ' + r.ref)}" data-sub="${r.status === 'executed' ? 'Signed by both parties' : r.status === 'member_signed' ? 'Signed by the member; VINC signature added on countersigning' : 'As the member sees it, before signing'}">View</button>`);
+    if (r.status === 'executed') parts.push(`<a class="btn btn-soft btn-xs" href="/api/admin/agreements/${r.id}/pdf?download=1">${VG.icon.download.replace('<svg', '<svg width="13" height="13"')} PDF</a>`);
     parts.push(`<button class="btn btn-soft btn-xs" data-audit="${r.id}">Details</button>`);
     if (r.status !== 'pending') parts.push(`<button class="btn btn-danger btn-xs" data-void="${r.id}">Void</button>`);
     return parts.join('');
@@ -152,7 +153,7 @@
       try { const r = await VG.api('/api/admin/agreements/send', { body: { user_ids: [Number(b.dataset.send)], kind: b.dataset.kind, template_id: b.dataset.tpl ? Number(b.dataset.tpl) : undefined } }); VG.toast(r.emailed ? 'Sent. They have an email with a link to sign.' : 'Ready in their portal. (No email address on file.)', 'ok'); render(el, ctx); }
       catch (e) { VG.toast(e.message, 'bad'); }
     })));
-    $$('[data-pdf]', el).forEach((b) => b.addEventListener('click', () => VG.viewer.open({ kind: 'pdf', title: b.dataset.title, src: `/api/admin/agreements/${b.dataset.pdf}/pdf` })));
+    $$('[data-pdf]', el).forEach((b) => b.addEventListener('click', () => VG.viewer.open({ kind: 'pdf', title: b.dataset.title, subtitle: b.dataset.sub, src: `/api/admin/agreements/${b.dataset.pdf}/pdf` })));
     $$('[data-cs]', el).forEach((b) => b.addEventListener('click', () => countersign(Number(b.dataset.cs), () => render(el, ctx))));
     $$('[data-audit]', el).forEach((b) => b.addEventListener('click', () => audit(Number(b.dataset.audit))));
     $$('[data-void]', el).forEach((b) => b.addEventListener('click', async () => {

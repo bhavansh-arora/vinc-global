@@ -98,12 +98,26 @@ member.get('/:id', (req, res) => {
   });
 });
 
-member.get('/:id/document', (req, res) => {
+member.get('/:id/document', async (req, res) => {
   const ag = agRow(req.params.id);
   if (!ag || ag.user_id !== req.user.id || ag.status === 'void') return res.status(404).json({ error: 'Not found.' });
   if (ag.status === 'executed') return sendPdf(res, ag.executed_name, fileTitle(ag), req.query.download === '1');
   const tpl = AG.templateById(ag.template_id);
   if (!tpl) return res.status(404).json({ error: 'Template missing.' });
+  if (ag.status === 'pending' && req.get('range') === undefined) {
+    // Reading the document before signing is part of the audit trail (once per half hour).
+    const last = db.prepare("SELECT at FROM agreement_events WHERE agreement_id = ? AND action IN ('Opened the document','Viewed the document') ORDER BY at DESC LIMIT 1").get(ag.id);
+    if (!last || last.at < Date.now() - 30 * 60000) AG.logEvent(ag.id, req.user.name || req.user.uid, 'Viewed the document', null, req.ip);
+  }
+  if (ag.status === 'member_signed') {
+    // Their own filled-in, signed copy (VINC's signature is added when it countersigns).
+    try {
+      const bytes = await AG.buildPdf(ag, { withCompany: false, certificate: false });
+      res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Cache-Control', 'no-store, private');
+      res.setHeader('Content-Disposition', 'inline; filename="signed-copy.pdf"');
+      return res.end(bytes);
+    } catch { /* fall back to the blank document */ }
+  }
   sendPdf(res, tpl.stored_name, `${AG.titleOf(ag)}.pdf`, false);
 });
 
