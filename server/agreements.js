@@ -201,11 +201,13 @@ const tplOf = (agOrTpl) => (agOrTpl.ref === undefined ? agOrTpl : templateOf(agO
  */
 function usesBlanks(t, kind = t && t.kind) {
   if (kind === 'custom' || !KINDS[kind] || !KINDS[kind].fields) return true;
-  return !!(t && t.fields);
+  return !!(t && (t.fields || needsBlanks(t)));
 }
+/** A standard document replaced before blanks were found automatically: its blanks still have to be found. */
+const needsBlanks = (t) => !!t && t.kind !== 'custom' && !t.fields && !!KINDS[t.kind] && !!KINDS[t.kind].fields && t.sha256 !== KINDS[t.kind].sha256;
 const blanksMode = (agOrTpl) => usesBlanks(tplOf(agOrTpl), agOrTpl.kind);
 /** A template can be signed once its blanks are set up (measured documents are always ready). */
-const isReady = (t) => !!t && (t.ready === undefined || t.ready === null || t.ready === 1);
+const isReady = (t) => !!t && !needsBlanks(t) && (t.ready === undefined || t.ready === null || t.ready === 1);
 
 /** The fields a document has: measured positions, or the blanks the admin set up. */
 function fieldsOf(agOrTpl) {
@@ -504,7 +506,7 @@ function readyTemplate(kind) {
  * one, is switched to blanks found in the file (the admin then sets them up).
  */
 async function prepareStandard(t) {
-  if (!t || t.kind === 'custom' || t.fields || !KINDS[t.kind] || !KINDS[t.kind].fields || t.sha256 === KINDS[t.kind].sha256) return t;
+  if (!needsBlanks(t)) return t;
   let blanks = [];
   try { blanks = (await detectBlanks(fs.readFileSync(filePath(t.stored_name)))).blanks; } catch (e) { console.error('[agreements] blank detection failed', e.message); }
   db.prepare('UPDATE agreement_templates SET fields = ?, ready = 0 WHERE id = ?').run(JSON.stringify(suggestBlanks(blanks)), t.id);
@@ -666,7 +668,7 @@ function publicAgreement(ag, { admin = false } = {}) {
 
 module.exports = {
   KINDS, GROUPS, MODES, TICKETS, CONSENT, NOT_NEEDED, kindsForRole, kindsFor, reqsFor, expand, groupOf, chosenIn, closeSiblings, describe,
-  usesBlanks, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  usesBlanks, needsBlanks, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

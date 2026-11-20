@@ -125,7 +125,7 @@ test('a replaced document gets its blanks found and waits for the admin to set t
   assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 2, 'its page plus the signature page');
 });
 
-test('an older replaced file without blanks is switched over when the admin opens Agreements', async () => {
+test('an older replaced file without blanks waits for set-up, and its blanks are found when the admin opens it', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
   // As uploaded by the previous version: a different file, no blanks, marked ready
@@ -139,8 +139,12 @@ test('an older replaced file without blanks is switched over when the admin open
   assert.equal(ts.id, id);
   assert.equal(ts.layout, 'blanks');
   assert.equal(ts.ready, false);
-  assert.equal(ts.blanks, 5);
+  assert.equal(ts.blanks, 0, 'the Agreements page itself does not read the PDF');
   assert.equal(list.body.templates.length, 4, 'advisory, term sheet, shareholder loan, convertible note');
+  const setup = await admin('GET', `/api/admin/agreements/custom/${id}`);
+  assert.equal(setup.status, 200);
+  assert.equal(setup.body.blanks_list.length, 5);
+  assert.equal(setup.body.ready, false);
 });
 
 test('advisors sign the Advisory Agreement and one investment agreement; investors sign one', async () => {

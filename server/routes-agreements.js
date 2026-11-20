@@ -174,8 +174,7 @@ function customInfo(t) {
   };
 }
 
-admin.get('/', async (_req, res) => {
-  for (const kind of STANDARD) await AG.prepareStandard(AG.activeTemplate(kind));   // older replaced files get their blanks found
+admin.get('/', (_req, res) => {
   const cs = AG.companySettings();
   const members = db.prepare("SELECT * FROM users WHERE role != 'admin' AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
   const rows = [];
@@ -268,15 +267,17 @@ function customDetail(t) {
 // Templates whose blanks the admin sets up: custom agreements, and standard documents without measured positions.
 const setupTemplate = (id) => { const t = AG.templateById(Number(id)); return t && t.active && AG.usesBlanks(t) ? t : null; };
 
-admin.get('/custom/:id', (req, res) => {
-  const t = setupTemplate(req.params.id);
+admin.get('/custom/:id', async (req, res) => {
+  let t = setupTemplate(req.params.id);
   if (!t) return res.status(404).json({ error: 'Not found.' });
+  if (AG.needsBlanks(t)) t = await AG.prepareStandard(t);   // a file replaced before blanks were found automatically
   res.json(customDetail(t));
 });
 
 admin.put('/custom/:id', (req, res) => {
   const t = setupTemplate(req.params.id);
   if (!t) return res.status(404).json({ error: 'Not found.' });
+  if (AG.needsBlanks(t)) return res.status(409).json({ error: 'Open Set up blanks again so the blanks can be found first.' });
   const standard = t.kind !== 'custom';
   const title = standard ? t.title : req.body.title !== undefined ? str(req.body.title, 120) : t.title;
   if (!title || !AG.SAFE.test(title)) return res.status(400).json({ error: 'Give the agreement a title (English letters).' });
