@@ -2,7 +2,8 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production DATA_DIR=/data PORT=3000
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# --omit=optional leaves out pdf.js's native graphics library (not needed: the portal only reads PDF text).
+RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 COPY server ./server
 COPY public ./public
 # Database and uploaded files live in /data (a Docker volume), owned by the unprivileged node user.
