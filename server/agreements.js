@@ -304,6 +304,8 @@ async function buildPdf(ag, { withCompany = false, certificate = false } = {}) {
   const tpl = templateOf(ag);
   if (!tpl) throw new Error('Template missing');
   const pdf = await PDFDocument.load(fs.readFileSync(filePath(tpl.stored_name)));
+  // Fillable form fields are printed into the page first, so an empty field can never cover what is written.
+  try { const form = pdf.getForm(); if (form.getFields().length) form.flatten(); } catch { /* not a form */ }
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const ink = rgb(0.06, 0.13, 0.36);          // dark blue, like a pen

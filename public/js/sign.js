@@ -259,6 +259,7 @@
     sync();
     return {
       sync,
+      pages: pages.map((p) => ({ n: p.n, W: p.vp.width, H: p.vp.height, wrap: p.wrap })),
       focusNext() {
         const order = spec.fields.filter((f) => f.src === 'member');
         for (const f of order) {

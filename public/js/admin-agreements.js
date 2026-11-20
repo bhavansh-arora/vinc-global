@@ -293,11 +293,22 @@
     }));
   }
 
-  // Set up the blanks of a custom agreement, with the document beside the list.
+  // Set up the blanks of a document, with the document beside the list. Blanks are found automatically
+  // (underscores, dotted lines, drawn lines, form fields); any that were missed can be added by clicking the page.
+  const SOURCE = { line: 'drawn line', field: 'form field', manual: 'added by you' };
+  const WIDTHS = [[90, 'Short'], [160, 'Medium'], [260, 'Long']];
   async function configure(id, d, after) {
     let t;
     try { t = await VG.api(`/api/admin/agreements/custom/${id}`); } catch (e) { VG.toast(e.message, 'bad'); return; }
     const modeOptions = (sel) => Object.entries(t.modes).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${VG.esc(v)}</option>`).join('');
+    const rowHtml = (b) => `<div class="cfg-row" data-id="${b.id}" ${b.manual ? 'data-manual="1"' : ''}>
+        <span class="cfg-n">${b.id > 0 ? b.id : '+'}</span>
+        <div style="flex:1;min-width:0"><div class="muted small" title="Text near the blank">p.${b.page} · ${VG.esc(b.hint || '—')}${SOURCE[b.source] ? ` <span class="cfg-src">${SOURCE[b.source]}</span>` : ''}</div>
+          <select class="input" data-mode>${modeOptions(b.mode)}</select>
+          <input class="input" data-label placeholder="What the member sees, e.g. Full name" value="${VG.esc(b.label || '')}" maxlength="60">
+          <input class="input" data-value placeholder="The fixed text to print" value="${VG.esc(b.value || '')}" maxlength="120" ${b.mode === 'company' ? '' : 'hidden'}>
+          ${b.manual ? `<div class="cfg-manual"><select class="input" data-width aria-label="Width">${WIDTHS.map(([w, l]) => `<option value="${w}" ${Math.abs(b.w - w) < 1 ? 'selected' : ''}>${l} (${w} pt)</option>`).join('')}${WIDTHS.some(([w]) => Math.abs(b.w - w) < 1) ? '' : `<option value="${b.w}" selected>Current (${Math.round(b.w)} pt)</option>`}</select>
+            <button type="button" class="btn btn-soft btn-xs" data-remove>Remove</button></div>` : ''}</div></div>`;
     const dlg = document.createElement('dialog');
     dlg.className = 'dlg cfg-dlg';
     dlg.innerHTML = `<div class="dlg-body">
@@ -309,14 +320,13 @@
           ${t.standard ? `<p class="small cfg-std">${t.ready ? 'Changes apply to copies nobody has signed yet.' : 'Members can sign this document once you save the set-up. Until then it shows as “being updated”.'}</p>`
             : `<label class="field"><span>Title</span><input class="input" id="cfg-title" value="${VG.esc(t.title)}" maxlength="120"></label>
           <label class="check" style="margin-bottom:12px"><input type="checkbox" id="cfg-req" ${t.required ? 'checked' : ''}> Required for permanent membership</label>`}
-          ${t.blanks_list.length ? `<p class="muted small">Each numbered box on the document is a blank. Say what it is for; anything you leave blank stays empty.</p>
-          <div class="cfg-list">${t.blanks_list.map((b) => `<div class="cfg-row" data-id="${b.id}">
-              <span class="cfg-n">${b.id}</span>
-              <div style="flex:1;min-width:0"><div class="muted small" title="Text near the blank">p.${b.page} · ${VG.esc(b.hint || '—')}</div>
-                <select class="input" data-mode>${modeOptions(b.mode)}</select>
-                <input class="input" data-label placeholder="What the member sees, e.g. Full name" value="${VG.esc(b.label || '')}" maxlength="60">
-                <input class="input" data-value placeholder="The fixed text to print" value="${VG.esc(b.value || '')}" maxlength="120" ${b.mode === 'company' ? '' : 'hidden'}></div></div>`).join('')}</div>`
-            : '<p class="muted">No underscore blanks were found in this PDF. Members will read it and sign; both signatures go on the signature page added at the end.</p>'}
+          <p class="muted small" id="cfg-intro">${t.blanks_list.length ? `${t.blanks_list.length} blank${t.blanks_list.length === 1 ? ' was' : 's were'} found. Each numbered box on the document is one: say what it is for. Anything set to “Leave blank” stays empty.`
+            : 'No blanks were found automatically (the PDF may be a scan, or its blanks are plain spaces).'} Missing one? Use <b>Add a blank</b>, then click the document where it goes.</p>
+          <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn-soft btn-sm" id="cfg-add">${VG.icon.plus} Add a blank</button>
+            <button type="button" class="btn btn-soft btn-sm" id="cfg-redetect" title="Look for blanks again; your choices for blanks found in the same place are kept">Find blanks again</button></div>
+          <p class="cfg-placing" id="cfg-placing" hidden>${VG.icon.spark.replace('<svg', '<svg width="14" height="14"')} Click on the document where the blank should go. <button type="button" class="btn btn-soft btn-xs" id="cfg-cancel-add">Cancel</button></p>
+          <div class="cfg-list" id="cfg-list">${t.blanks_list.map(rowHtml).join('')}</div>
+          <p class="muted small">Both signatures, with date, time and place, are also printed on a signature page added at the end.</p>
           <p class="form-error" id="cfg-err"></p>
           <div class="btn-row"><button class="btn btn-primary" type="button" id="cfg-save">${t.standard ? 'Save and make it ready to sign' : 'Save'}</button>${t.standard ? '' : '<button class="btn btn-amber" type="button" id="cfg-save-send">Save and send…</button>'}</div>
         </div></div></div>`;
@@ -324,30 +334,90 @@
     dlg.showModal();
     dlg.addEventListener('close', () => { dlg.remove(); after && after(); });
     $('[data-x]', dlg).addEventListener('click', () => dlg.close());
-    const spec = { fields: t.blanks_list.map((b) => ({ key: 'n' + b.id, page: b.page, x: b.x, w: b.w, line: b.line, src: 'auto', label: `Blank ${b.id}` })) };
+
+    const blanks = t.blanks_list.map((b) => ({ ...b }));
+    const byId = (rid) => blanks.find((b) => String(b.id) === String(rid));
+    const spec = { fields: blanks.map((b) => ({ key: 'n' + b.id, page: b.page, x: b.x, w: b.w, line: b.line, src: 'auto', label: `Blank ${b.id}` })) };
+    let doc = null;
     VG.FieldDoc($('#cfg-doc', dlg), { url: `/api/admin/agreements/templates/${t.id}/raw`, spec, state: { fields: {} }, preview: (key) => '#' + key.slice(1), editable: false })
+      .then((fd) => { doc = fd; $$('.cfg-row', dlg).forEach(paintRow); })
       .catch(() => { $('#cfg-doc', dlg).innerHTML = '<p class="muted">Could not show the document.</p>'; });
+    const boxOf = (rid) => $(`#cfg-doc [data-key="n${rid}"]`, dlg);
     const paintRow = (row) => {
       const mode = row.querySelector('[data-mode]').value;
       row.querySelector('[data-value]').hidden = mode !== 'company';
       row.querySelector('[data-label]').hidden = !['member', 'optional'].includes(mode);
       row.classList.toggle('off', mode === 'skip');
-      const box = $(`#cfg-doc [data-key="n${row.dataset.id}"]`, dlg);
+      const box = boxOf(row.dataset.id);
       if (box) box.classList.toggle('off', mode === 'skip');
     };
-    $$('.cfg-row', dlg).forEach((row) => {
+    const bindRow = (row) => {
       paintRow(row);
       row.querySelector('[data-mode]').addEventListener('change', () => paintRow(row));
       row.addEventListener('focusin', () => {
-        const box = $(`#cfg-doc [data-key="n${row.dataset.id}"]`, dlg);
+        const box = boxOf(row.dataset.id);
         if (box) { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); box.classList.remove('nudge'); void box.offsetWidth; box.classList.add('nudge'); }
       });
+      const width = row.querySelector('[data-width]');
+      if (width) width.addEventListener('change', () => {
+        const b = byId(row.dataset.id), box = boxOf(row.dataset.id), pg = doc && doc.pages[b.page - 1];
+        b.w = Math.min(Number(width.value), pg ? pg.W - b.x - 4 : Number(width.value));
+        if (box && pg) box.style.width = (b.w / pg.W) * 100 + '%';
+      });
+      const rm = row.querySelector('[data-remove]');
+      if (rm) rm.addEventListener('click', () => {
+        const i = blanks.findIndex((b) => String(b.id) === row.dataset.id);
+        if (i >= 0) blanks.splice(i, 1);
+        const box = boxOf(row.dataset.id); if (box) box.remove();
+        row.remove();
+      });
+    };
+    $$('.cfg-row', dlg).forEach(bindRow);
+
+    // Adding a blank by hand: click "Add a blank", then click the page.
+    let placing = false, nextTemp = -1;
+    const setPlacing = (on) => { placing = on; $('#cfg-placing', dlg).hidden = !on; $('#cfg-add', dlg).parentElement.hidden = on; $('#cfg-doc', dlg).classList.toggle('placing', on); };
+    $('#cfg-redetect', dlg).addEventListener('click', () => VG.busy($('#cfg-redetect', dlg), async () => {
+      try {
+        const r = await VG.api(`/api/admin/agreements/custom/${id}/redetect`, { method: 'POST' });
+        VG.toast(`Found ${r.found} blank${r.found === 1 ? '' : 's'}${r.kept ? `; your choices for ${r.kept} were kept` : ''}.`, 'ok');
+        dlg.remove();            // reopen with the new list (without running "after" twice)
+        configure(id, d, after);
+      } catch (e) { $('#cfg-err', dlg).textContent = e.message; }
+    }));
+    $('#cfg-add', dlg).addEventListener('click', () => { if (!doc) { VG.toast('One moment: the document is still loading.', 'bad'); return; } setPlacing(true); });
+    $('#cfg-cancel-add', dlg).addEventListener('click', () => setPlacing(false));
+    $('#cfg-doc', dlg).addEventListener('click', (e) => {
+      if (!placing || !doc) return;
+      const pg = doc.pages.find((p) => p.wrap.contains(e.target));
+      if (!pg) return;
+      const r = pg.wrap.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * pg.W, py = ((e.clientY - r.top) / r.height) * pg.H;
+      const b = { id: nextTemp--, page: pg.n, x: Math.max(4, px - 4), w: 160, line: Math.min(pg.H - 4, py + 6), hint: 'Added by you', source: 'manual', manual: true, mode: 'member', label: '', value: '' };
+      b.w = Math.max(30, Math.min(b.w, pg.W - b.x - 4));
+      blanks.push(b);
+      const box = document.createElement('div');
+      box.className = 'fd-field fd-text src-auto manual';
+      box.dataset.key = 'n' + b.id;
+      Object.assign(box.style, { left: (b.x / pg.W) * 100 + '%', width: (b.w / pg.W) * 100 + '%', top: ((b.line - 15) / pg.H) * 100 + '%', height: (15 / pg.H) * 100 + '%' });
+      box.innerHTML = '<span class="fd-auto">+</span>';
+      pg.wrap.appendChild(box);
+      $('#cfg-list', dlg).insertAdjacentHTML('beforeend', rowHtml(b));
+      const row = $(`.cfg-row[data-id="${b.id}"]`, dlg);
+      bindRow(row);
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      row.querySelector('[data-label]').focus({ preventScroll: true });
+      setPlacing(false);
     });
-    setTimeout(() => $$('.cfg-row', dlg).forEach(paintRow), 1500);
+
     const save = async (thenSend) => {
       const body = { title: t.standard ? t.title : $('#cfg-title', dlg).value, required: t.standard ? true : $('#cfg-req', dlg).checked,
-        blanks: $$('.cfg-row', dlg).map((row) => ({ id: Number(row.dataset.id), mode: row.querySelector('[data-mode]').value, label: row.querySelector('[data-label]').value, value: row.querySelector('[data-value]').value })) };
-      if (!t.blanks_list.length) delete body.blanks;
+        blanks: $$('.cfg-row', dlg).map((row) => {
+          const b = byId(row.dataset.id) || {};
+          const out = { id: Number(row.dataset.id), mode: row.querySelector('[data-mode]').value, label: row.querySelector('[data-label]').value, value: row.querySelector('[data-value]').value };
+          if (row.dataset.manual) Object.assign(out, { manual: true, page: b.page, x: b.x, w: b.w, line: b.line });
+          return out;
+        }) };
       try {
         const saved = await VG.api(`/api/admin/agreements/custom/${id}`, { method: 'PUT', body });
         VG.toast(t.standard ? `Saved. Members can now sign the ${t.title}${saved.offered ? `; ${saved.offered} new cop${saved.offered === 1 ? 'y was' : 'ies were'} sent to active members` : ''}.` : 'Saved.', 'ok');

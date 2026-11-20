@@ -281,8 +281,26 @@ admin.put('/custom/:id', (req, res) => {
   const standard = t.kind !== 'custom';
   const title = standard ? t.title : req.body.title !== undefined ? str(req.body.title, 120) : t.title;
   if (!title || !AG.SAFE.test(title)) return res.status(400).json({ error: 'Give the agreement a title (English letters).' });
-  const blanks = t.fields ? JSON.parse(t.fields) : [];
+  let blanks = t.fields ? JSON.parse(t.fields) : [];
   const incoming = Array.isArray(req.body.blanks) ? req.body.blanks : [];
+  if (Array.isArray(req.body.blanks)) {
+    // Blanks the admin placed by hand: removed ones go, new ones are added, and their width can change.
+    const num = (v) => Math.round(Number(v) * 10) / 10;
+    blanks = blanks.filter((b) => !b.manual || incoming.some((x) => Number(x.id) === b.id));
+    for (const c of incoming) {
+      if (!c.manual) continue;
+      const page = Math.round(Number(c.page)), x = num(c.x), w = num(c.w), line = num(c.line);
+      if (!(page >= 1 && page <= (t.pages || 1)) || ![x, w, line].every(Number.isFinite) || x < 0 || x > 1500 || w < 10 || w > 700 || line < 5 || line > 2500) {
+        return res.status(400).json({ error: 'A blank you added is outside the page. Remove it and add it again.' });
+      }
+      const existing = blanks.find((b) => b.id === Number(c.id));
+      if (existing) { if (existing.manual) Object.assign(existing, { page, x, w, line }); continue; }
+      const id = Math.max(0, ...blanks.map((b) => b.id)) + 1;
+      c.id = id;
+      blanks.push({ id, page, x, w, line, hint: 'Added by you', source: 'manual', manual: true, mode: 'member', label: '', value: '' });
+    }
+    if (blanks.length > 600) return res.status(400).json({ error: 'That is too many blanks for one document.' });
+  }
   for (const b of blanks) {
     const c = incoming.find((x) => Number(x.id) === b.id);
     if (!c) continue;
@@ -310,6 +328,27 @@ admin.put('/custom/:id', (req, res) => {
   db.prepare('UPDATE agreement_templates SET title = ?, fields = ?, required = ? WHERE id = ?').run(title, JSON.stringify(blanks), required, t.id);
   db.prepare("UPDATE agreements SET mandatory = ? WHERE template_id = ? AND status IN ('pending','member_signed')").run(required, t.id);
   res.json(customDetail(AG.templateById(t.id)));
+});
+
+// Find the blanks again (after detection improves), keeping the choices made for blanks found in the same
+// place and every blank added by hand.
+admin.post('/custom/:id/redetect', async (req, res) => {
+  const t = setupTemplate(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Not found.' });
+  const signedAlready = db.prepare("SELECT COUNT(*) AS n FROM agreements WHERE template_id = ? AND status IN ('member_signed','executed')").get(t.id).n;
+  if (signedAlready) return res.status(409).json({ error: 'Someone has already signed this agreement, so its blanks can no longer change. Upload it again instead.' });
+  const old = t.fields ? JSON.parse(t.fields) : [];
+  const { blanks, error } = await findBlanks(fs.readFileSync(AG.filePath(t.stored_name)));
+  if (error) return res.status(422).json({ error: 'The blanks could not be read from this PDF. You can still add them by hand.' });
+  let kept = 0;
+  for (const b of blanks) {
+    const was = old.find((o) => !o.manual && o.page === b.page && Math.abs(o.line - b.line) < 3 && Math.abs(o.x - b.x) < 5);
+    if (was) { Object.assign(b, { mode: was.mode, label: was.label, value: was.value }); kept++; }
+  }
+  const manual = old.filter((o) => o.manual).map((o, i) => ({ ...o, id: blanks.length + i + 1 }));
+  const all = [...blanks, ...manual];
+  db.prepare('UPDATE agreement_templates SET fields = ? WHERE id = ?').run(JSON.stringify(all), t.id);
+  res.json({ ...customDetail(AG.templateById(t.id)), found: blanks.length, kept });
 });
 
 admin.delete('/custom/:id', (req, res) => {

@@ -820,6 +820,12 @@ dialog.dlg.cfg-dlg { width: min(1180px, calc(100vw - 24px)); }
 .cfg-row { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
 .cfg-row.off { opacity: .6; }
 .cfg-row .input { min-height: 36px; margin-top: 6px; font-size: .9rem; }
+.cfg-src { display: inline-block; padding: 0 6px; border-radius: 999px; background: var(--plum-soft); color: var(--plum); font: 600 .68rem var(--mono); }
+.cfg-manual { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.cfg-manual .input { margin-top: 0; flex: 1; }
+.cfg-placing { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; margin: 0 0 10px; border-radius: var(--radius-sm); background: var(--teal-soft); color: var(--ink); font-size: var(--t-small); font-weight: 600; }
+.cfg-doc.placing .fd-page { cursor: crosshair; outline: 2px dashed var(--teal); outline-offset: 2px; }
+.cfg-doc .fd-field.manual { background: rgba(42, 111, 107, .22); outline: 1.5px solid var(--teal); }
 .cfg-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--amber); color: #2B1A10; font: 700 .85rem var(--mono); flex: none; }
 .pick-list { max-height: 300px; overflow-y: auto; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; background: var(--card); }
 .pick-row { padding: 6px 8px; border-radius: 8px; }

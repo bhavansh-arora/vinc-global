@@ -212,3 +212,71 @@ test('an unreadable PDF never stops the server', async () => {
   const res = await fetch(base + '/healthz');
   assert.equal(res.status, 200);
 });
+
+test('blanks drawn as lines, dotted lines and form fields are found; table borders and rules are not', async () => {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([595.2, 841.92]);
+  const text = (t, x, y) => page.drawText(t, { x, y, size: 11, font });
+  text('Lender name:', 60, 720); page.drawLine({ start: { x: 135, y: 718 }, end: { x: 330, y: 718 }, thickness: 0.8 });   // drawn blank
+  text('Amount: Rs. ......................... only', 60, 690);                                                            // dotted leader
+  text('Email:', 60, 660);
+  const form = doc.getForm(); form.createTextField('lender.email').addToPage(page, { x: 100, y: 655, width: 200, height: 16 });   // form field
+  text('An underlined defined term', 60, 630); page.drawLine({ start: { x: 60, y: 628 }, end: { x: 190, y: 628 }, thickness: 0.6 });   // underlined words
+  page.drawLine({ start: { x: 40, y: 600 }, end: { x: 555, y: 600 }, thickness: 1 });                                     // rule across the page
+  page.drawRectangle({ x: 60, y: 520, width: 200, height: 40, borderWidth: 1 });                                           // a table cell
+  const found = await AGM.detectBlanks(Buffer.from(await doc.save()));
+  const by = (src) => found.blanks.filter((b) => b.source === src);
+  assert.equal(found.blanks.length, 3, JSON.stringify(found.blanks));
+  assert.equal(by('line').length, 1);
+  assert.equal(by('line')[0].hint, 'Lender name:');
+  assert.ok(Math.abs(by('line')[0].x - 135) < 2 && Math.abs(by('line')[0].w - 195) < 3);
+  assert.equal(by('text')[0].hint, 'Amount: Rs.');
+  assert.equal(by('field')[0].hint, 'Email:');
+});
+
+test('the admin can add, resize and remove blanks by hand', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  const plain = await PDFDocument.create(); plain.addPage([595.2, 841.92]);   // a scan-like page: nothing to find
+  const fd = new FormData();
+  fd.append('file', new Blob([Buffer.from(await plain.save())], { type: 'application/pdf' }), 'scan.pdf');
+  fd.append('title', 'Scanned side letter');
+  const t = await admin('POST', '/api/admin/agreements/custom', undefined, fd);
+  assert.equal(t.body.blanks, 0);
+  const put = await admin('PUT', `/api/admin/agreements/custom/${t.body.id}`, { blanks: [
+    { id: -1, manual: true, page: 1, x: 100, w: 160, line: 300, mode: 'member', label: 'Full name' },
+    { id: -2, manual: true, page: 1, x: 100, w: 90, line: 340, mode: 'member_signature', label: '' },
+  ] });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  const list = put.body.blanks_list;
+  assert.deepEqual(list.map((b) => [b.id, b.manual, b.mode]), [[1, true, 'member'], [2, true, 'member_signature']]);
+  assert.equal(list[0].label, 'Full name');
+  // Resize one and remove the other
+  const again = await admin('PUT', `/api/admin/agreements/custom/${t.body.id}`, { blanks: [{ id: 1, manual: true, page: 1, x: 100, w: 260, line: 300, mode: 'member', label: 'Full name' }] });
+  assert.equal(again.body.blanks_list.length, 1);
+  assert.equal(again.body.blanks_list[0].w, 260);
+  // Outside the page is refused
+  assert.equal((await admin('PUT', `/api/admin/agreements/custom/${t.body.id}`, { blanks: [{ id: -1, manual: true, page: 2, x: 10, w: 100, line: 100, mode: 'member' }] })).status, 400);
+});
+
+test('"Find blanks again" keeps choices for blanks in the same place and blanks added by hand', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  const fd = new FormData();
+  fd.append('file', new Blob([await agreementPdf('SIDE LETTER')], { type: 'application/pdf' }), 'side.pdf');
+  fd.append('title', 'Side letter');
+  const t = await admin('POST', '/api/admin/agreements/custom', undefined, fd);
+  const first = t.body.blanks_list[0];
+  await admin('PUT', `/api/admin/agreements/custom/${t.body.id}`, { blanks: [
+    { id: first.id, mode: 'member_name', label: '' },
+    { id: -1, manual: true, page: 1, x: 300, w: 120, line: 400, mode: 'member', label: 'Witness' },
+  ] });
+  const r = await admin('POST', `/api/admin/agreements/custom/${t.body.id}/redetect`);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.found, 5);
+  assert.equal(r.body.blanks_list.find((b) => b.id === first.id).mode, 'member_name');
+  const hand = r.body.blanks_list.find((b) => b.manual);
+  assert.equal(hand.label, 'Witness');
+  assert.equal(hand.id, 6);
+});
