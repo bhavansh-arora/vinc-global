@@ -231,6 +231,8 @@ addColumn('agreement_templates', 'required', 'required INTEGER NOT NULL DEFAULT 
 addColumn('agreements', 'mandatory', 'mandatory INTEGER NOT NULL DEFAULT 1');
 // A template is ready to sign once its blanks are set up (measured standard documents always are).
 addColumn('agreement_templates', 'ready', 'ready INTEGER NOT NULL DEFAULT 1');
+// Values the company fills in when it countersigns (e.g. the Member Loan Agreement's resolution date).
+addColumn('agreements', 'company_fields', 'company_fields TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS idx_agreements_user ON agreements(user_id, kind)');
 addColumn('users', 'email_updates', 'email_updates INTEGER NOT NULL DEFAULT 1');
 // Links: can the site be shown inside the portal? (see server/links.js)

@@ -108,8 +108,8 @@ KINDS.term_sheet.layouts['0c151c63f32810d6744a404e7549cd5d6cf3baa3ab691d9438e2b5
 }) };
 
 // Member Loan Agreement (member / shareholder, 2026, 13 pages). The lender enters the loan amount and the tenure
-// once; every place they appear is filled, with the words written out. Two terms set by the company (the date of
-// the special resolution and the disbursement period) come from the admin's settings. Schedule 1 takes the
+// once; every place they appear is filled, with the words written out. Two terms are the company's (the date of
+// the special resolution and the disbursement period): it fills them in when it countersigns. Schedule 1 takes the
 // lender's bank account; Schedule 2 (disbursement record) and Schedule 4 (option notice) are filled in later.
 KINDS.member_loan = { title: 'Member Loan Agreement', role: 'advisor', group: 'instrument', layouts: {
   ec5bc960ddbb1a39268caefb0cbde787aa72034465b11d58fd51800aa2a4bcf8: { pages: 13, fields: [
@@ -124,13 +124,13 @@ KINDS.member_loan = { title: 'Member Loan Agreement', role: 'advisor', group: 'i
     { key: 'folio', page: 1, x: 306, w: 209.6, line: 454.7, src: 'member', label: 'Folio no. / shares held' },
     { key: 'email', page: 1, x: 306, w: 209.6, line: 487.4, src: 'member', label: 'Email' },
     { key: 'phone', page: 1, x: 306, w: 209.6, line: 520.1, src: 'member', label: 'Phone' },
-    { key: 'resolution_date', page: 2, x: 343.6, w: 95.6, line: 208.3, src: 'setting', align: 'center', label: 'Date of the special resolution' },
+    { key: 'resolution_date', page: 2, x: 343.6, w: 95.6, line: 208.3, src: 'company', align: 'center', label: 'Date of the special resolution' },
     { key: 'loan_amount', page: 2, x: 241, w: 95.9, line: 355.1, src: 'member', align: 'center', label: 'Loan amount (Rs.)' },
     { key: 'loan_words_2', from: 'loan_amount_words', page: 2, x: 220, w: 153.4, line: 370.1, src: 'auto', label: 'Loan amount in words' },
     { key: 'maturity_months', from: 'tenure', page: 2, x: 220, w: 39.6, line: 714.4, src: 'auto', align: 'center', label: 'Tenure (months)' },
     { key: 'loan_amount_3', from: 'loan_amount', page: 3, x: 352.5, w: 118, line: 687.5, src: 'auto', align: 'center', label: 'Loan amount (Rs.)' },
     { key: 'loan_words_3', from: 'loan_amount_words', page: 3, x: 102, w: 226.4, line: 704.5, src: 'auto', label: 'Loan amount in words' },
-    { key: 'disburse_days', page: 4, x: 188.5, w: 29.9, line: 100.1, src: 'setting', align: 'center', label: 'Disbursement period (days)' },
+    { key: 'disburse_days', page: 4, x: 188.5, w: 29.9, line: 100.1, src: 'company', align: 'center', label: 'Disbursement period (days)' },
     { key: 'tenure', page: 5, x: 209.8, w: 44.1, line: 395.1, src: 'member', align: 'center', label: 'Tenure (months)' },
     { key: 'tenure_words', page: 5, x: 262, w: 73.6, line: 395.1, src: 'auto', align: 'center', label: 'Tenure in words' },
     { key: 'company_sig', page: 11, x: 86, w: 170, line: 516, h: 24, src: 'company', type: 'signature', label: 'Company signature' },
@@ -198,6 +198,17 @@ function istDateTime(t) {
 }
 const istDate = (t) => { const p = istParts(t); return `${p.day} ${p.month} ${p.year}`; };
 const utcStamp = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
+
+/** Values the company entered when countersigning. */
+const companyFields = (ag) => { try { return ag.company_fields ? JSON.parse(ag.company_fields) : {}; } catch { return {}; } };
+/** Company fields a document needs at countersigning (beyond signature, date and place). */
+const COMPANY_INPUTS = { resolution_date: 'Special resolution passed on (Recital D)', disburse_days: 'Disburse within (days, Clause 2.2)' };
+const companyInputs = (ag) => fieldsOf(ag).filter((f) => f.src === 'company' && COMPANY_INPUTS[f.key]).map((f) => ({ key: f.key, label: COMPANY_INPUTS[f.key] }));
+/** The saved defaults for those fields, if the admin set any. */
+function companyDefaults() {
+  const s = getSettings();
+  return { resolution_date: s.loan_resolution_date || '', disburse_days: s.loan_disburse_days || '' };
+}
 
 /** 500000 → "5,00,000" (Indian grouping). */
 const inr = (n) => Math.round(n).toLocaleString('en-IN');
@@ -395,7 +406,7 @@ function values(ag, opts = {}) {
     loan_amount: f.loan_amount ? inr(Number(f.loan_amount)) : '',
     loan_amount_words: f.loan_amount ? inWords(Number(f.loan_amount)) : '',
     tenure: f.tenure || '', tenure_words: f.tenure ? inWords(Number(f.tenure)).toLowerCase() : '',
-    resolution_date: getSettings().loan_resolution_date || '', disburse_days: getSettings().loan_disburse_days || '',
+    ...companyFields(ag),
     _choices: { residence: f.residence, ticket: f.ticket },
   };
   const company = opts.withCompany && ag.company_signed_at;
@@ -803,7 +814,7 @@ function publicAgreement(ag, { admin = false } = {}) {
 
 module.exports = {
   KINDS, GROUPS, MODES, TICKETS, CONSENT, NOT_NEEDED, kindsForRole, kindsFor, reqsFor, expand, groupOf, chosenIn, closeSiblings, describe,
-  usesBlanks, needsBlanks, measuredFields, inWords, inr, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  usesBlanks, needsBlanks, measuredFields, inWords, inr, companyInputs, companyDefaults, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

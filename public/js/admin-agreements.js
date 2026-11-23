@@ -73,7 +73,7 @@
     if (lt) lt.addEventListener('submit', (e) => {
       e.preventDefault();
       VG.busy(lt.querySelector('[type=submit]'), async () => {
-        try { await VG.api('/api/admin/agreements/company', { method: 'PUT', body: { loan_resolution_date: lt.loan_resolution_date.value, loan_disburse_days: lt.loan_disburse_days.value } }); VG.toast('Loan terms saved. They appear on every Member Loan Agreement.', 'ok'); }
+        try { await VG.api('/api/admin/agreements/company', { method: 'PUT', body: { loan_resolution_date: lt.loan_resolution_date.value, loan_disburse_days: lt.loan_disburse_days.value } }); VG.toast('Saved. They will be pre-filled when you countersign a loan agreement.', 'ok'); }
         catch (ex) { VG.toast(ex.message, 'bad'); }
       });
     });
@@ -111,13 +111,13 @@
 
   // Two Member Loan Agreement terms set by the company, printed on every copy.
   function loanTerms(t) {
-    return `<form class="loan-terms" id="loan-terms"><p class="label" style="margin:0 0 2px">Member Loan Agreement: company terms</p>
-      <p class="muted small" style="margin:0 0 10px">Printed on every copy. Left empty, the blank stays empty.</p>
+    return `<form class="loan-terms" id="loan-terms"><p class="label" style="margin:0 0 2px">Member Loan Agreement: company details (optional defaults)</p>
+      <p class="muted small" style="margin:0 0 10px">You fill these in when you countersign each loan agreement. Saving them here pre-fills that step and lets automatic countersigning include them; without them, loan agreements wait for you to countersign even when automatic countersigning is on.</p>
       <div class="form-row">
         <label class="field"><span>Special resolution passed on <span class="hint">Recital D</span></span><input class="input" name="loan_resolution_date" value="${VG.esc(t.resolution_date || '')}" placeholder="e.g. 15 October 2026" maxlength="40"></label>
         <label class="field"><span>Disburse within (days) <span class="hint">Clause 2.2</span></span><input class="input mono" name="loan_disburse_days" value="${VG.esc(t.disburse_days || '')}" inputmode="numeric" maxlength="3" placeholder="7"></label>
       </div>
-      <button class="btn btn-soft btn-sm" type="submit">Save loan terms</button></form>`;
+      <button class="btn btn-soft btn-sm" type="submit">Save defaults</button></form>`;
   }
 
   function companyCard(c) {
@@ -219,6 +219,8 @@
               <div class="cs-sig" id="cs-saved"><img alt="Company signature" src="/api/admin/agreements/company/signature"></div>` : ''}
             <div id="cs-new" ${c.has_signature ? 'hidden' : ''}><div id="cs-pad2"></div>
               <label class="check" style="margin-top:8px"><input type="checkbox" id="cs-keep" ${c.has_signature ? '' : 'checked'}> Save as the company signature</label></div>
+            ${(d.company_inputs || []).length ? `<div class="cs-terms"><p class="label" style="margin:12px 0 6px">Company details for this agreement</p>
+              ${d.company_inputs.map((f) => `<label class="field"><span>${VG.esc(f.label)}</span><input class="input" data-cf="${f.key}" value="${VG.esc((d.company_fields && d.company_fields[f.key]) || (d.company_defaults && d.company_defaults[f.key]) || '')}" ${f.key === 'disburse_days' ? 'inputmode="numeric" maxlength="3" placeholder="7"' : 'maxlength="40" placeholder="e.g. 15 October 2026"'}></label>`).join('')}</div>` : ''}
             <label class="field" style="margin-top:12px"><span>Place of signing</span><input class="input" id="cs-place2" value="${VG.esc(c.place)}"></label>
             <p class="muted small">Date and time are recorded when you click Countersign (IST).</p>
             <p class="form-error" id="cs-err"></p>
@@ -237,7 +239,7 @@
     const segEl = $('#cs-mode', dlg);
     if (segEl) VG.seg(segEl, (v) => { mode = v; $('#cs-saved', dlg).hidden = v !== 'saved'; $('#cs-new', dlg).hidden = v !== 'new'; if (v === 'new') ensurePad(); });
     $('#cs-go', dlg).addEventListener('click', () => VG.busy($('#cs-go', dlg), async () => {
-      const body = { place: $('#cs-place2', dlg).value };
+      const body = { place: $('#cs-place2', dlg).value, company_fields: Object.fromEntries($$('[data-cf]', dlg).map((i) => [i.dataset.cf, i.value])) };
       if (mode === 'new') {
         if (!pad || pad.isEmpty()) { $('#cs-err', dlg).textContent = 'Draw or type the signature first.'; return; }
         body.signature = await pad.toDataURL();

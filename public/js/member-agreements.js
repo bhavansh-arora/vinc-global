@@ -145,8 +145,6 @@
       if (key === 'loan_words_2' || key === 'loan_words_3') return amount ? inWords(amount) : '';
       if (key === 'maturity_months') return tenure ? String(tenure) : '';
       if (key === 'tenure_words') return tenure ? inWords(tenure).toLowerCase() : '';
-      if (key === 'resolution_date') return (d.settings && d.settings.resolution_date) || '';
-      if (key === 'disburse_days') return (d.settings && d.settings.disburse_days) || '';
       if (custom && fd) {
         const f = fd;
         if (f.mode === 'member_name') return (VG.me && VG.me.name) || '';

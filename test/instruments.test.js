@@ -314,7 +314,8 @@ test('members can view each agreement before signing, and their filled copy afte
 test('the Member Loan Agreement asks for the loan amount, tenure and bank account, and writes the words out', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
-  await admin('PUT', '/api/admin/agreements/company', { auto: false, loan_resolution_date: '15 October 2026', loan_disburse_days: '7' });
+  // Automatic countersigning is on, but no defaults are saved for the company's loan details
+  await admin('PUT', '/api/admin/agreements/company', { auto: true, loan_resolution_date: '', loan_disburse_days: '' });
   // A 13-page stand-in registered with the real file's measured layout
   const doc = await PDFDocument.create(); for (let i = 0; i < 13; i++) doc.addPage([595.276, 841.89]);
   const buf = Buffer.from(await doc.save());
@@ -327,7 +328,7 @@ test('the Member Loan Agreement asks for the loan amount, tenure and bank accoun
   const ag = (await m('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'member_loan');
   const detail = (await m('GET', `/api/member/agreements/${ag.id}`)).body;
   assert.equal(detail.spec.custom, false);
-  assert.equal(detail.settings.disburse_days, '7');
+  assert.equal(detail.spec.fields.find((f) => f.key === 'resolution_date').src, 'company', 'the company fills it in');
   const base = { name: 'Asha Rao', relation_type: 'W/o', relation_name: 'Vikram Rao', address1: '42, 3rd Cross, Indiranagar', pan: 'BQRPR5678L', email: 'asha@example.com', phone: '+91 99000 54321' };
   const bad = await sign(m, ag.id, { ...base, folio: '1,558 shares', loan_amount: '5,50,000', tenure: '2', bank_holder: 'Asha Rao', bank_name: 'HDFC Bank', bank_account: '50100123456789', bank_ifsc: 'HDFC1234' });
   assert.equal(bad.status, 400);
@@ -335,6 +336,15 @@ test('the Member Loan Agreement asks for the loan amount, tenure and bank accoun
   assert.ok(bad.body.errors.some((e) => /IFSC/.test(e)));
   const ok = await sign(m, ag.id, { ...base, folio: '1,558 shares', loan_amount: '5,50,000', tenure: '18', bank_holder: 'Asha Rao', bank_name: 'HDFC Bank, Indiranagar', bank_account: '5010 0123 4567 89', bank_ifsc: 'hdfc0001234' });
   assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.executed, false, 'waits for the company to fill in its details and countersign');
+  // Countersigning asks for the resolution date and the disbursement period
+  const info = (await admin('GET', `/api/admin/agreements/${ag.id}`)).body;
+  assert.deepEqual(info.company_inputs.map((x) => x.key), ['resolution_date', 'disburse_days']);
+  assert.equal((await admin('POST', `/api/admin/agreements/${ag.id}/countersign`, { place: 'Bengaluru' })).status, 400);
+  const cs = await admin('POST', `/api/admin/agreements/${ag.id}/countersign`, { place: 'Bengaluru', company_fields: { resolution_date: '15 October 2026', disburse_days: '7' } });
+  assert.equal(cs.status, 200, JSON.stringify(cs.body));
+  assert.equal(cs.body.agreement.status, 'executed');
+  assert.deepEqual(JSON.parse(db.prepare('SELECT company_fields FROM agreements WHERE id = ?').get(ag.id).company_fields), { resolution_date: '15 October 2026', disburse_days: '7' });
   const row = db.prepare('SELECT fields FROM agreements WHERE id = ?').get(ag.id);
   const f = JSON.parse(row.fields);
   assert.equal(f.loan_amount, '550000');
@@ -345,5 +355,14 @@ test('the Member Loan Agreement asks for the loan amount, tenure and bank accoun
   assert.equal(AGM.inr(550000), '5,50,000');
   const pdf = await admin('GET', `/api/admin/agreements/${ag.id}/pdf`);
   assert.equal(pdf.status, 200);
-  assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 13, 'measured documents get no extra signature page');
+  assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 14, 'its 13 pages plus the signature certificate');
+  // With defaults saved, automatic countersigning fills them in
+  await admin('PUT', '/api/admin/agreements/company', { loan_resolution_date: '15 October 2026', loan_disburse_days: '7' });
+  const { m: m2 } = await member(admin, 'advisor', 'Loan Advisor Two');
+  const ag2 = (await m2('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'member_loan');
+  const auto = await sign(m2, ag2.id, { ...base, folio: '10 shares', loan_amount: '100000', tenure: '12', bank_holder: 'Loan Advisor Two', bank_name: 'SBI, MG Road', bank_account: '123456789012', bank_ifsc: 'SBIN0001234' });
+  assert.equal(auto.status, 200, JSON.stringify(auto.body));
+  assert.equal(auto.body.executed, true);
+  assert.equal(JSON.parse(db.prepare('SELECT company_fields FROM agreements WHERE id = ?').get(ag2.id).company_fields).disburse_days, '7');
+  await admin('PUT', '/api/admin/agreements/company', { auto: false });
 });

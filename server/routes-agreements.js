@@ -48,6 +48,20 @@ function upgradeIfComplete(userId) {
   return true;
 }
 
+/** Check the values the company fills in at countersigning; returns { values, error }. */
+function readCompanyInputs(ag, input) {
+  const values = {};
+  for (const { key } of AG.companyInputs(ag)) {
+    let v = str(input && input[key] !== undefined ? String(input[key]) : '', 40);
+    if (key === 'disburse_days') {
+      v = v.replace(/[^\d]/g, '');
+      if (!(Number(v) >= 1 && Number(v) <= 365)) return { error: 'Enter the disbursement period in days (1 to 365).' };
+    } else if (v.length < 4 || !AG.SAFE.test(v)) return { error: 'Enter the date of the special resolution, for example 15 October 2026.' };
+    values[key] = v;
+  }
+  return { values };
+}
+
 async function executeAndNotify(ag, opts) {
   const done = await AG.execute(ag, opts);
   const u = userRow(done.user_id);
@@ -94,7 +108,6 @@ member.get('/:id', (req, res) => {
     agreement: AG.publicAgreement(ag),
     spec: { title: AG.titleOf(ag), pages: tpl.pages, custom: AG.blanksMode(ag), fields: AG.fieldsOf(ag) },
     prefill, tickets: AG.TICKETS, consent: AG.CONSENT,
-    settings: (() => { const s = require('./db').getSettings(); return { resolution_date: s.loan_resolution_date || '', disburse_days: s.loan_disburse_days || '' }; })(),
     company: { signer: `${cs.signer_name}, ${cs.signer_title}` },
   });
 });
@@ -152,7 +165,11 @@ member.post('/:id/sign', async (req, res) => {
   const cs = AG.companySettings();
   let result = { executed: false, upgraded: false };
   try {
-    if (cs.auto && cs.signature) {
+    const needs = AG.companyInputs(ag);
+    const defaults = AG.companyDefaults();
+    const autoOk = cs.auto && cs.signature && needs.every((n) => defaults[n.key]);
+    if (autoOk) {
+      if (needs.length) db.prepare('UPDATE agreements SET company_fields = ? WHERE id = ?').run(JSON.stringify(Object.fromEntries(needs.map((n) => [n.key, defaults[n.key]]))), ag.id);
       const { done, upgraded } = await executeAndNotify(agRow(ag.id), { method: 'auto', place: cs.place, sigFile: cs.signature, ip: null, actor: 'VINC Global' });
       result = { executed: done.status === 'executed', upgraded };
     } else {
@@ -422,6 +439,8 @@ admin.get('/:id', (req, res) => {
     user: A.publicUser(userRow(ag.user_id)),
     events: db.prepare('SELECT at, actor, action, detail, ip FROM agreement_events WHERE agreement_id = ? ORDER BY at, id').all(ag.id),
     company: { signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature },
+    company_inputs: AG.companyInputs(ag), company_defaults: AG.companyDefaults(),
+    company_fields: ag.company_fields ? JSON.parse(ag.company_fields) : null,
   });
 });
 
@@ -491,6 +510,8 @@ admin.post('/:id/countersign', async (req, res) => {
   const cs = AG.companySettings();
   const place = str(req.body.place, 60) || cs.place;
   if (!AG.SAFE.test(place)) return res.status(400).json({ error: 'Please write the place in English letters.' });
+  const terms = readCompanyInputs(ag, req.body.company_fields || {});
+  if (terms.error) return res.status(400).json({ error: terms.error });
   let sigFile = cs.signature;
   if (req.body.signature) {
     const sig = AG.decodeSignature(req.body.signature);
@@ -502,6 +523,7 @@ admin.post('/:id/countersign', async (req, res) => {
     }
   }
   if (!sigFile) return res.status(400).json({ error: 'Add the company signature.' });
+  if (Object.keys(terms.values).length) db.prepare('UPDATE agreements SET company_fields = ? WHERE id = ?').run(JSON.stringify(terms.values), ag.id);
   try {
     const { done, upgraded } = await executeAndNotify(ag, { method: 'manual', place, sigFile, ip: req.ip, actor: 'Admin (admin)' });
     res.json({ agreement: AG.publicAgreement(done, { admin: true }), upgraded, user: A.publicUser(userRow(done.user_id)) });
