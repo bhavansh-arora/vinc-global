@@ -81,7 +81,7 @@ member.get('/:id', (req, res) => {
   const u = req.user;
   let prefill = {};
   if (!AG.blanksMode(ag)) {
-    const prev = db.prepare("SELECT fields FROM agreements WHERE user_id = ? AND kind IN ('advisory','term_sheet') AND fields LIKE '%\"pan\"%' ORDER BY id DESC LIMIT 1").get(u.id);
+    const prev = db.prepare("SELECT fields FROM agreements WHERE user_id = ? AND kind IN ('advisory','term_sheet','member_loan') AND fields LIKE '%\"pan\"%' ORDER BY id DESC LIMIT 1").get(u.id);
     prefill = prev ? JSON.parse(prev.fields) : { name: u.name || '', email: u.email || '', phone: u.phone || '' };
   }
   if (ag.status === 'pending') {
@@ -94,6 +94,7 @@ member.get('/:id', (req, res) => {
     agreement: AG.publicAgreement(ag),
     spec: { title: AG.titleOf(ag), pages: tpl.pages, custom: AG.blanksMode(ag), fields: AG.fieldsOf(ag) },
     prefill, tickets: AG.TICKETS, consent: AG.CONSENT,
+    settings: (() => { const s = require('./db').getSettings(); return { resolution_date: s.loan_resolution_date || '', disburse_days: s.loan_disburse_days || '' }; })(),
     company: { signer: `${cs.signer_name}, ${cs.signer_title}` },
   });
 });
@@ -164,11 +165,12 @@ member.post('/:id/sign', async (req, res) => {
 });
 
 // ================================================================== admin
-const STANDARD = Object.keys(AG.KINDS);
+const STANDARD = Object.keys(AG.KINDS).filter((k) => !AG.KINDS[k].retired);
 function standardInfo(kind) {
   const t = AG.activeTemplate(kind);
   const g = AG.groupOf(kind);
-  const base = { kind, title: AG.KINDS[kind].title, group: g, required_for: g ? 'Advisors and investors sign one of the three' : 'Advisors' };
+  const REQUIRED_FOR = { advisory: 'Advisors', term_sheet: 'Required: Investors · Advisors: this or the Member Loan Agreement', member_loan: 'Advisors: this or the Investor Term Sheet' };
+  const base = { kind, title: AG.KINDS[kind].title, group: g, required_for: REQUIRED_FOR[kind] || '' };
   if (!t) return { ...base, uploaded: false };
   const blanks = t.fields ? JSON.parse(t.fields) : [];
   return {
@@ -210,6 +212,7 @@ admin.get('/', (_req, res) => {
     groups: AG.GROUPS,
     custom: db.prepare("SELECT * FROM agreement_templates WHERE kind = 'custom' AND active = 1 ORDER BY id DESC").all().map(customInfo),
     company: { signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at },
+    loan_terms: (() => { const st = require('./db').getSettings(); return { resolution_date: st.loan_resolution_date || '', disburse_days: st.loan_disburse_days || '' }; })(),
     members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, label: A.memberLabel(u), state: A.accessState(u), access_type: u.access_type })),
     rows,
   });
@@ -240,7 +243,8 @@ admin.post('/templates/:kind', up.single('pdf'), async (req, res) => {
   if (!AG.KINDS[kind]) { if (req.file) up.removeStored(req.file.filename); return res.status(404).json({ error: 'Unknown document.' }); }
   const r = await readPdf(req, res); if (!r) return;
   const sha = AG.sha256(r.buf);
-  const measured = !!AG.KINDS[kind].fields && sha === AG.KINDS[kind].sha256;
+  if (AG.KINDS[kind].retired) { up.removeStored(req.file.filename); return res.status(400).json({ error: 'This agreement is no longer used.' }); }
+  const measured = !!AG.measuredFields({ kind, sha256: sha });
   const found = measured ? { blanks: [], error: null } : await findBlanks(r.buf);
   let id;
   tx(() => {
@@ -433,12 +437,25 @@ admin.put('/company', (req, res) => {
   if (b.signer_name !== undefined) { const v = str(b.signer_name, 80); if (v && AG.SAFE.test(v)) set.run('company_signer_name', v); }
   if (b.signer_title !== undefined) { const v = str(b.signer_title, 80); if (v && AG.SAFE.test(v)) set.run('company_signer_title', v); }
   if (b.place !== undefined) { const v = str(b.place, 60); if (v && AG.SAFE.test(v)) set.run('company_sign_place', v); }
+  // Member Loan Agreement terms set by the company, printed on every copy.
+  if (b.loan_resolution_date !== undefined) {
+    const v = str(b.loan_resolution_date, 40);
+    if (!AG.SAFE.test(v)) return res.status(400).json({ error: 'Please write the date in English letters and numbers.' });
+    set.run('loan_resolution_date', v);
+  }
+  if (b.loan_disburse_days !== undefined) {
+    const v = str(String(b.loan_disburse_days), 4).replace(/[^\d]/g, '');
+    if (b.loan_disburse_days !== '' && !(Number(v) >= 1 && Number(v) <= 365)) return res.status(400).json({ error: 'Enter the disbursement period in days (1 to 365).' });
+    set.run('loan_disburse_days', v);
+  }
   if (b.auto !== undefined) {
     if (b.auto && !AG.companySettings().signature) return res.status(400).json({ error: 'Save the company signature first, then turn on automatic countersigning.' });
     set.run('auto_countersign', b.auto ? '1' : '0');
   }
   const cs = AG.companySettings();
-  res.json({ signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at });
+  const st = require('./db').getSettings();
+  res.json({ signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at,
+    loan_resolution_date: st.loan_resolution_date || '', loan_disburse_days: st.loan_disburse_days || '' });
 });
 
 admin.get('/company/signature', (_req, res) => {

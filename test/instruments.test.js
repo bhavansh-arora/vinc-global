@@ -1,6 +1,6 @@
 'use strict';
-// Replaced documents get their blanks found and set up; the Shareholder Loan Agreement and the Convertible Debt
-// Note Agreement join the Investor Term Sheet as "sign any one"; advisors also sign the Advisory Agreement.
+// Replaced documents get their blanks found and set up. Advisors sign the Advisory Agreement and either the
+// Investor Term Sheet or the Member Loan Agreement; investors sign the Investor Term Sheet.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -92,7 +92,7 @@ test('a replaced document gets its blanks found and waits for the admin to set t
   // The measured Advisory Agreement (a stand-in) is in place and an advisor has it waiting
   const original = await PDFDocument.create(); for (let i = 0; i < 6; i++) original.addPage([595.2, 841.92]);
   const origBuf = Buffer.from(await original.save());
-  AGM.KINDS.advisory.sha256 = require('node:crypto').createHash('sha256').update(origBuf).digest('hex');
+  AGM.KINDS.advisory.layouts[require('node:crypto').createHash('sha256').update(origBuf).digest('hex')] = { fields: AGM.KINDS.advisory.fields };
   assert.equal((await upload(admin, 'advisory', origBuf)).body.layout, 'measured');
   const { m, user } = await member(admin, 'advisor', 'Replace Advisor');
   const before = (await m('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'advisory');
@@ -140,46 +140,46 @@ test('an older replaced file without blanks waits for set-up, and its blanks are
   assert.equal(ts.layout, 'blanks');
   assert.equal(ts.ready, false);
   assert.equal(ts.blanks, 0, 'the Agreements page itself does not read the PDF');
-  assert.equal(list.body.templates.length, 4, 'advisory, term sheet, shareholder loan, convertible note');
+  assert.deepEqual(list.body.templates.map((t) => t.kind), ['advisory', 'term_sheet', 'member_loan'], 'retired kinds are not offered');
   const setup = await admin('GET', `/api/admin/agreements/custom/${id}`);
   assert.equal(setup.status, 200);
   assert.equal(setup.body.blanks_list.length, 5);
   assert.equal(setup.body.ready, false);
 });
 
-test('advisors sign the Advisory Agreement and one investment agreement; investors sign one', async () => {
+test('advisors sign the Advisory Agreement and the Term Sheet or the Member Loan Agreement; investors sign the Term Sheet', async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
   await admin('PUT', '/api/admin/agreements/company', { signature: pngDataUrl(), auto: true });
-  // Set up all three investment agreements (the term sheet from the previous test, and the two new ones)
+  // Set up the term sheet from the previous test, and upload the Member Loan Agreement (a stand-in file)
   const ts = (await admin('GET', '/api/admin/agreements')).body.templates.find((t) => t.kind === 'term_sheet');
   const tsDetail = await admin('GET', `/api/admin/agreements/custom/${ts.id}`);
   await admin('PUT', `/api/admin/agreements/custom/${ts.id}`, { blanks: tsDetail.body.blanks_list.map((b) => ({ id: b.id, mode: 'skip' })) });
-  await uploadAndSetUp(admin, 'shareholder_loan', await agreementPdf('SHAREHOLDER LOAN AGREEMENT'));
-  await uploadAndSetUp(admin, 'convertible_note', await agreementPdf('CONVERTIBLE DEBT NOTE AGREEMENT'));
+  await uploadAndSetUp(admin, 'member_loan', await agreementPdf('LOAN AGREEMENT'));
+  // Retired documents cannot be uploaded any more
+  assert.equal((await upload(admin, 'shareholder_loan', await agreementPdf('OLD'))).status, 400);
 
-  // An advisor is offered the Advisory Agreement and all three investment agreements
+  // An advisor is offered the Advisory Agreement and both investment agreements
   const { m: adv, user: advUser } = await member(admin, 'advisor', 'Choice Advisor');
   let list = (await adv('GET', '/api/member/agreements')).body;
-  assert.deepEqual(list.agreements.map((a) => a.kind).sort(), ['advisory', 'convertible_note', 'shareholder_loan', 'term_sheet']);
-  assert.equal(list.agreements.filter((a) => a.group === 'instrument').length, 3);
-  const approveMail = await admin('POST', `/api/admin/users/${advUser.id}/approve`, { type: 'temporary' });
-  assert.equal(approveMail.status, 200);
+  assert.deepEqual(list.agreements.map((a) => a.kind).sort(), ['advisory', 'member_loan', 'term_sheet']);
+  assert.equal(list.agreements.filter((a) => a.group === 'instrument').length, 2);
+  assert.equal((await admin('POST', `/api/admin/users/${advUser.id}/approve`, { type: 'temporary' })).status, 200);
 
-  // Signing the Shareholder Loan Agreement withdraws the other two choices
-  const loan = list.agreements.find((a) => a.kind === 'shareholder_loan');
-  const panKey = (await adv('GET', `/api/member/agreements/${loan.id}`)).body.spec.fields.find((f) => f.label === 'PAN').key;
-  const amountKey = (await adv('GET', `/api/member/agreements/${loan.id}`)).body.spec.fields.find((f) => f.label === 'Amount (Rs.)').key;
-  const r1 = await sign(adv, loan.id, { [panKey]: 'ABCDE1234F', [amountKey]: '5,00,000' });
+  // Signing the Member Loan Agreement withdraws the Term Sheet
+  const loan = list.agreements.find((a) => a.kind === 'member_loan');
+  const lf = (await adv('GET', `/api/member/agreements/${loan.id}`)).body.spec.fields;
+  const key = (label) => lf.find((f) => f.label === label).key;
+  const r1 = await sign(adv, loan.id, { [key('PAN')]: 'ABCDE1234F', [key('Amount (Rs.)')]: '5,00,000' });
   assert.equal(r1.status, 200, JSON.stringify(r1.body));
   assert.equal(r1.body.upgraded, false, 'the Advisory Agreement is still needed');
   list = (await adv('GET', '/api/member/agreements')).body;
-  assert.deepEqual(list.agreements.map((a) => a.kind).sort(), ['advisory', 'shareholder_loan']);
+  assert.deepEqual(list.agreements.map((a) => a.kind).sort(), ['advisory', 'member_loan']);
   const tsVoid = db.prepare("SELECT status, void_reason FROM agreements WHERE user_id = ? AND kind = 'term_sheet'").get(advUser.id);
   assert.equal(tsVoid.status, 'void');
-  assert.match(tsVoid.void_reason, /^Not needed: you chose the Shareholder Loan Agreement/);
+  assert.match(tsVoid.void_reason, /^Not needed: you chose the Member Loan Agreement/);
 
-  // The Advisory Agreement (measured stand-in from test 1 was replaced and set up there) completes it
+  // The Advisory Agreement completes it
   const advisory = list.agreements.find((a) => a.kind === 'advisory');
   const advFields = (await adv('GET', `/api/member/agreements/${advisory.id}`)).body.spec.fields;
   const fill = Object.fromEntries(advFields.filter((f) => f.src === 'member' && !f.type && !f.placeOf).map((f) => [f.key, 'ABCDE1234F']));
@@ -187,24 +187,30 @@ test('advisors sign the Advisory Agreement and one investment agreement; investo
   assert.equal(r2.status, 200, JSON.stringify(r2.body));
   assert.equal(r2.body.upgraded, true, 'advisory + one investment agreement makes them permanent');
 
-  // An investor signs just one of the three
+  // An investor is offered only the Term Sheet, and signing it makes them permanent
   const { m: inv, user: invUser } = await member(admin, 'investor', 'Choice Investor');
   list = (await inv('GET', '/api/member/agreements')).body;
-  assert.deepEqual(list.agreements.map((a) => a.kind).sort(), ['convertible_note', 'shareholder_loan', 'term_sheet']);
-  const note = list.agreements.find((a) => a.kind === 'convertible_note');
-  const nf = (await inv('GET', `/api/member/agreements/${note.id}`)).body.spec.fields;
-  const r3 = await sign(inv, note.id, Object.fromEntries(nf.filter((f) => f.src === 'member' && !f.type && !f.placeOf).map((f) => [f.key, '1'])));
+  assert.deepEqual(list.agreements.map((a) => a.kind), ['term_sheet']);
+  const r3 = await sign(inv, list.agreements[0].id, {});
   assert.equal(r3.status, 200, JSON.stringify(r3.body));
   assert.equal(r3.body.upgraded, true);
   assert.equal(db.prepare('SELECT access_type FROM users WHERE id = ?').get(invUser.id).access_type, 'permanent');
-  // A withdrawn choice cannot be signed afterwards
-  const tsInv = db.prepare("SELECT id FROM agreements WHERE user_id = ? AND kind = 'term_sheet'").get(invUser.id);
-  assert.notEqual((await sign(inv, tsInv.id)).status, 200);
 
   // The approval email named the choice
   const mail = require('../server/mailer.js');
   const sent = mail.sent.filter((x) => x.to === 'choiceadvisor@example.com' && /agreements are ready/i.test(x.subject));
   assert.ok(sent.length, 'the advisor got one email for the set of agreements');
+});
+
+test('unsigned copies of retired agreements are withdrawn when the server starts', async () => {
+  const uid = db.prepare("INSERT INTO users (uid, role, name, status, created_at) VALUES ('VG-ADV-RETIRE', 'advisor', 'Old Choice', 'active', ?)").run(Date.now()).lastInsertRowid;
+  const ag = db.prepare("INSERT INTO agreements (ref, user_id, kind, mandatory, status, created_at, updated_at) VALUES ('VG-AGR-RETIRED1', ?, 'convertible_note', 1, 'pending', ?, ?)").run(uid, Date.now(), Date.now()).lastInsertRowid;
+  // Load the agreements module afresh, as a restart would
+  delete require.cache[require.resolve('../server/agreements.js')];
+  require('../server/agreements.js');
+  const row = db.prepare('SELECT status, void_reason FROM agreements WHERE id = ?').get(ag);
+  assert.equal(row.status, 'void');
+  assert.match(row.void_reason, /no longer used/);
 });
 
 test('an unreadable PDF never stops the server', async () => {
@@ -285,16 +291,16 @@ test('members can view each agreement before signing, and their filled copy afte
   const admin = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
   await admin('PUT', '/api/admin/agreements/company', { auto: false });
-  const { m } = await member(admin, 'investor', 'Viewing Investor');
+  const { m } = await member(admin, 'advisor', 'Viewing Advisor');
   const list = (await m('GET', '/api/member/agreements')).body.agreements;
-  const loan = list.find((a) => a.kind === 'shareholder_loan');
+  const loan = list.find((a) => a.kind === 'member_loan');
   const blank = await m('GET', `/api/member/agreements/${loan.id}/document`);
   assert.equal(blank.status, 200);
   assert.equal(blank.body.subarray(0, 5).toString(), '%PDF-');
   const events = db.prepare('SELECT action FROM agreement_events WHERE agreement_id = ?').all(loan.id).map((e) => e.action);
   assert.ok(events.includes('Viewed the document'));
   // Another member cannot view it
-  const { m: other } = await member(admin, 'investor', 'Other Investor');
+  const { m: other } = await member(admin, 'advisor', 'Other Advisor');
   assert.equal((await other('GET', `/api/member/agreements/${loan.id}/document`)).status, 404);
   // After signing, View shows their own filled copy (with the signature page)
   const f = (await m('GET', `/api/member/agreements/${loan.id}`)).body.spec.fields;
@@ -303,4 +309,41 @@ test('members can view each agreement before signing, and their filled copy afte
   const filled = await m('GET', `/api/member/agreements/${loan.id}/document`);
   assert.equal(filled.status, 200);
   assert.ok((await PDFDocument.load(filled.body)).getPageCount() > (await PDFDocument.load(blank.body)).getPageCount(), 'includes the signature page');
+});
+
+test('the Member Loan Agreement asks for the loan amount, tenure and bank account, and writes the words out', async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  await admin('PUT', '/api/admin/agreements/company', { auto: false, loan_resolution_date: '15 October 2026', loan_disburse_days: '7' });
+  // A 13-page stand-in registered with the real file's measured layout
+  const doc = await PDFDocument.create(); for (let i = 0; i < 13; i++) doc.addPage([595.276, 841.89]);
+  const buf = Buffer.from(await doc.save());
+  const K = AGM.KINDS.member_loan;
+  K.layouts[AGM.sha256(buf)] = K.layouts.ec5bc960ddbb1a39268caefb0cbde787aa72034465b11d58fd51800aa2a4bcf8;
+  const up = await upload(admin, 'member_loan', buf);
+  assert.equal(up.body.layout, 'measured');
+  assert.equal(up.body.ready, true);
+  const { m } = await member(admin, 'advisor', 'Loan Advisor');
+  const ag = (await m('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'member_loan');
+  const detail = (await m('GET', `/api/member/agreements/${ag.id}`)).body;
+  assert.equal(detail.spec.custom, false);
+  assert.equal(detail.settings.disburse_days, '7');
+  const base = { name: 'Asha Rao', relation_type: 'W/o', relation_name: 'Vikram Rao', address1: '42, 3rd Cross, Indiranagar', pan: 'BQRPR5678L', email: 'asha@example.com', phone: '+91 99000 54321' };
+  const bad = await sign(m, ag.id, { ...base, folio: '1,558 shares', loan_amount: '5,50,000', tenure: '2', bank_holder: 'Asha Rao', bank_name: 'HDFC Bank', bank_account: '50100123456789', bank_ifsc: 'HDFC1234' });
+  assert.equal(bad.status, 400);
+  assert.ok(bad.body.errors.some((e) => /tenure/i.test(e)));
+  assert.ok(bad.body.errors.some((e) => /IFSC/.test(e)));
+  const ok = await sign(m, ag.id, { ...base, folio: '1,558 shares', loan_amount: '5,50,000', tenure: '18', bank_holder: 'Asha Rao', bank_name: 'HDFC Bank, Indiranagar', bank_account: '5010 0123 4567 89', bank_ifsc: 'hdfc0001234' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  const row = db.prepare('SELECT fields FROM agreements WHERE id = ?').get(ag.id);
+  const f = JSON.parse(row.fields);
+  assert.equal(f.loan_amount, '550000');
+  assert.equal(f.bank_account, '50100123456789');
+  assert.equal(f.bank_ifsc, 'HDFC0001234');
+  assert.equal(AGM.inWords(550000), 'Five Lakh Fifty Thousand');
+  assert.equal(AGM.inWords(18).toLowerCase(), 'eighteen');
+  assert.equal(AGM.inr(550000), '5,50,000');
+  const pdf = await admin('GET', `/api/admin/agreements/${ag.id}/pdf`);
+  assert.equal(pdf.status, 200);
+  assert.equal((await PDFDocument.load(pdf.body)).getPageCount(), 13, 'measured documents get no extra signature page');
 });

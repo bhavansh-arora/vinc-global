@@ -108,7 +108,8 @@ async function detectBlanks(buf) {
     }
     // 2. Drawn lines
     try {
-      for (const ln of await drawnLines(page, pdfjs, W)) {
+      const drawn = await drawnLines(page, pdfjs, W);
+      for (const ln of drawn.lines) {
         const underText = items.some((o) => {
           if (!o.str.trim()) return false;
           const ox = o.transform[4], ow = o.width, base = o.transform[5];
@@ -116,7 +117,9 @@ async function detectBlanks(buf) {
           return base >= ln.y - 1 && base <= ln.y + 6 && overlap > 0.4 * Math.min(ln.x1 - ln.x0, ow);
         });
         if (underText) continue;                                   // an underlined word, not a blank
-        const hint = labelLeft(items, ln.x0, ln.y) || labelAbove(items, ln.x0, ln.x1, ln.y + 2);
+        // Forms usually print the label just above a drawn line; otherwise it is on the same line, to the left
+        // (but never across a table's dividing line).
+        const hint = labelAbove(items, ln.x0, ln.x1, ln.y + 2) || labelLeft(items, ln.x0, ln.y, drawn.verticals);
         onPage.push({ page: n, x: ln.x0, w: ln.x1 - ln.x0, line: H - ln.y + 0.5, hint, source: 'line' });
       }
     } catch { /* drawn lines are a bonus; text blanks still count */ }
@@ -183,9 +186,10 @@ function xOf({ it, k }, widthOf, end = false) {
   return it.transform[4] + it.width * (widthOf(it.str.slice(0, end ? k + 1 : k)) / full);
 }
 
-/** Words just before a blank on the same line. */
-function labelLeft(items, x, base) {
-  const left = items.filter((o) => Math.abs(o.transform[5] - base) < 7 && o.transform[4] + o.width <= x + 2 && x - (o.transform[4] + o.width) < 60 && o.str.replace(/[_.…]+/g, '').trim())
+/** Words just before a blank on the same line (not across a vertical line between them). */
+function labelLeft(items, x, base, verticals = []) {
+  const walled = (o) => verticals.some((v) => v.x0 >= o.transform[4] + o.width - 1 && v.x1 <= x + 1 && base >= v.y0 - 2 && base <= v.y1 + 2);
+  const left = items.filter((o) => Math.abs(o.transform[5] - base) < 7 && o.transform[4] + o.width <= x + 2 && x - (o.transform[4] + o.width) < 60 && o.str.replace(/[_.…]+/g, '').trim() && !walled(o))
     .sort((a, b) => b.transform[4] - a.transform[4]);
   return left[0] ? left[0].str.replace(/[_.…]{3,}/g, ' ').trim() : '';
 }
@@ -208,24 +212,39 @@ async function drawnLines(page, pdfjs, pageWidth) {
   const ops = await page.getOperatorList();
   const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
   const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
-  let ctm = [1, 0, 0, 1, 0, 0], lw = 1;
+  let ctm = [1, 0, 0, 1, 0, 0], lw = 1, clipBox = null, clipNext = false;
   const stack = [];
   const hs = [], vs = [];
+  const toPage = (bb) => {
+    const [a, b, c, d] = bb;
+    const pts = [apply(ctm, a, b), apply(ctm, c, b), apply(ctm, a, d), apply(ctm, c, d)];
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  };
   for (let i = 0; i < ops.fnArray.length; i++) {
     const fn = ops.fnArray[i], args = ops.argsArray[i];
-    if (fn === O.save) stack.push([ctm, lw]);
-    else if (fn === O.restore) { if (stack.length) [ctm, lw] = stack.pop(); }
+    if (fn === O.save) stack.push([ctm, lw, clipBox]);
+    else if (fn === O.restore) { if (stack.length) [ctm, lw, clipBox] = stack.pop(); }
     else if (fn === O.transform && args && args.length === 6) ctm = mul(ctm, args);
     else if (fn === O.setLineWidth && args) lw = Number(args[0]) || 0;
+    else if (fn === O.clip || fn === O.eoClip) clipNext = true;
     else if (fn === O.constructPath && Array.isArray(args) && typeof args[0] === 'number' && args[2] && args[2].length === 4) {
+      // Some PDF makers (WeasyPrint, browsers) draw a line as a large box clipped to a thin strip.
+      if (clipNext) {
+        const c = toPage(args[2]);
+        clipBox = clipBox ? { x0: Math.max(clipBox.x0, c.x0), x1: Math.min(clipBox.x1, c.x1), y0: Math.max(clipBox.y0, c.y0), y1: Math.min(clipBox.y1, c.y1) } : c;
+        clipNext = false;
+      }
       if (!paints.has(args[0])) continue;
-      const [a, b, c, d] = args[2];
+      const box = toPage(args[2]);
       const pad = strokes.has(args[0]) ? Math.max(lw, 0.5) / 2 : 0;
-      const pts = [apply(ctm, a, b), apply(ctm, c, b), apply(ctm, a, d), apply(ctm, c, d)];
-      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-      const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
       const scale = Math.hypot(ctm[0], ctm[1]) || 1;
       box.y0 -= pad * scale; box.y1 += pad * scale;
+      if (clipBox) {
+        box.x0 = Math.max(box.x0, clipBox.x0); box.x1 = Math.min(box.x1, clipBox.x1);
+        box.y0 = Math.max(box.y0, clipBox.y0); box.y1 = Math.min(box.y1, clipBox.y1);
+        if (box.x1 <= box.x0 || box.y1 <= box.y0) continue;      // clipped away entirely
+      }
       const w = box.x1 - box.x0, h = box.y1 - box.y0;
       if (h <= 2.5 && w >= 0.3) hs.push(box);
       else if (w <= 2.5 && h >= 4) vs.push(box);
@@ -240,14 +259,16 @@ async function drawnLines(page, pdfjs, pageWidth) {
     if (m) { m.x0 = Math.min(m.x0, h.x0); m.x1 = Math.max(m.x1, h.x1); }
     else merged.push({ x0: h.x0, x1: h.x1, y: cy });
   }
+  const verticals = vs;
   const touches = (g) => vs.some((v) => (Math.abs(v.x0 - g.x0) < 3 || Math.abs(v.x1 - g.x1) < 3 || Math.abs(v.x0 - g.x1) < 3 || Math.abs(v.x1 - g.x0) < 3) && g.y >= v.y0 - 3 && g.y <= v.y1 + 3);
-  return merged.filter((g) => {
+  const lines = merged.filter((g) => {
     const w = g.x1 - g.x0;
     if (w < 24 || w > 0.75 * pageWidth) return false;     // too short to write in, or a rule across the page
     if (touches(g)) return false;                           // part of a table or a box
     // Two lines of the same length close together are usually a box drawn without sides.
     return !merged.some((o) => o !== g && Math.abs(o.x0 - g.x0) < 2 && Math.abs(o.x1 - g.x1) < 2 && Math.abs(o.y - g.y) < 14);
   });
+  return { lines, verticals };
 }
 
 module.exports = { detectBlanks };

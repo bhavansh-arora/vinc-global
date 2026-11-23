@@ -16,7 +16,7 @@ const app = require('../server/index.js');
 const AGM = require('../server/agreements.js');
 // The real agreements are not in this public repository. Generated stand-ins are registered as the files the
 // positions were measured on, so the measured path is what these tests exercise.
-const asMeasured = (kind, buf) => { AGM.KINDS[kind].sha256 = require('node:crypto').createHash('sha256').update(buf).digest('hex'); return buf; };
+const asMeasured = (kind, buf) => { AGM.KINDS[kind].layouts[require('node:crypto').createHash('sha256').update(buf).digest('hex')] = { fields: AGM.KINDS[kind].fields }; return buf; };
 const mail = require('../server/mailer.js');
 
 let server, base;

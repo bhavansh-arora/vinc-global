@@ -74,16 +74,90 @@ const KINDS = {
   },
 };
 
-// Documents with no measured positions: their blanks are always found automatically.
-KINDS.shareholder_loan = { title: 'Shareholder Loan Agreement', role: 'investor', group: 'instrument' };
-KINDS.convertible_note = { title: 'Convertible Debt Note Agreement', role: 'investor', group: 'instrument' };
+// Every file with measured positions, by its SHA-256. The first versions are above; the 2026 versions follow.
+for (const k of Object.keys(KINDS)) KINDS[k].layouts = { [KINDS[k].sha256]: { pages: KINDS[k].pages, fields: KINDS[k].fields } };
+
+// Advisory Agreement (2026, 6 pages): the advisor's details sit on drawn lines in the parties table (page 1);
+// both signature blocks are on page 6.
+KINDS.advisory.layouts.b312b711b262c4723316a99de4cf025b22879eec1d73759970cff520c774e59a = { pages: 6, fields: [
+  { key: 'date_day', page: 1, x: 65.2, w: 32.1, line: 162.6, src: 'auto', align: 'center', label: 'Day' },
+  { key: 'date_month', page: 1, x: 134.9, w: 102.8, line: 162.6, src: 'auto', align: 'center', label: 'Month' },
+  { key: 'date_year', page: 1, x: 256.9, w: 19.3, line: 162.6, src: 'auto', label: 'Year' },
+  { key: 'name', page: 1, x: 304, w: 219.2, line: 219, src: 'member', label: 'Full name' },
+  { key: 'relation', page: 1, x: 304, w: 219.2, line: 253.1, src: 'member', label: 'S/o / D/o / W/o' },
+  { key: 'address1', page: 1, x: 304, w: 219.2, line: 287.2, src: 'member', label: 'Address line 1' },
+  { key: 'address2', page: 1, x: 304, w: 219.2, line: 306.8, src: 'member', label: 'Address line 2' },
+  { key: 'pan', page: 1, x: 304, w: 219.2, line: 340.9, src: 'member', label: 'PAN' },
+  { key: 'email', page: 1, x: 304, w: 219.2, line: 375, src: 'member', label: 'Email' },
+  { key: 'phone', page: 1, x: 304, w: 219.2, line: 409, src: 'member', label: 'Phone' },
+  { key: 'company_sig', page: 6, x: 80, w: 170, line: 540, h: 26, src: 'company', type: 'signature', label: 'Company signature' },
+  { key: 'company_date', page: 6, x: 73, w: 217.2, line: 606.5, src: 'company', label: 'Company date' },
+  { key: 'company_place', page: 6, x: 73, w: 217.2, line: 640.8, src: 'company', label: 'Company place' },
+  { key: 'member_sig', page: 6, x: 312, w: 170, line: 540, h: 26, src: 'member', type: 'signature', label: 'Your signature' },
+  { key: 'member_name', page: 6, x: 305, w: 217.2, line: 577.1, src: 'auto', label: 'Name' },
+  { key: 'member_date', page: 6, x: 305, w: 217.2, line: 620.4, src: 'auto', label: 'Date and time' },
+  { key: 'member_place', page: 6, x: 305, w: 217.2, line: 654.7, src: 'member', label: 'Place' },
+] };
+
+// Investor Term Sheet (Pre-Seed, 2026, 15 pages): page 1 as in the first version (0.4 pt lower); the
+// signature blocks moved to page 15.
+KINDS.term_sheet.layouts['0c151c63f32810d6744a404e7549cd5d6cf3baa3ab691d9438e2b5371b523c63'] = { pages: 15, fields: KINDS.term_sheet.fields.map((f) => {
+  if (f.page === 1) return { ...f, line: +(f.line + 0.4).toFixed(1) };
+  const moved = { company_sig: 424, company_date: 498.6, company_place: 532.9, member_sig: 408, member_name: 445.6, ticket_chosen: 464, member_date: 498.6, member_place: 532.9 };
+  return { ...f, page: 15, line: moved[f.key] };
+}) };
+
+// Member Loan Agreement (member / shareholder, 2026, 13 pages). The lender enters the loan amount and the tenure
+// once; every place they appear is filled, with the words written out. Two terms set by the company (the date of
+// the special resolution and the disbursement period) come from the admin's settings. Schedule 1 takes the
+// lender's bank account; Schedule 2 (disbursement record) and Schedule 4 (option notice) are filled in later.
+KINDS.member_loan = { title: 'Member Loan Agreement', role: 'advisor', group: 'instrument', layouts: {
+  ec5bc960ddbb1a39268caefb0cbde787aa72034465b11d58fd51800aa2a4bcf8: { pages: 13, fields: [
+    { key: 'date_day', page: 1, x: 96.7, w: 31.3, line: 208, src: 'auto', align: 'center', label: 'Day' },
+    { key: 'date_month', page: 1, x: 173.8, w: 109.7, line: 208, src: 'auto', align: 'center', label: 'Month' },
+    { key: 'date_year', page: 1, x: 307, w: 23.5, line: 208, src: 'auto', label: 'Year' },
+    { key: 'name', page: 1, x: 306, w: 209.6, line: 307.1, src: 'member', label: 'Full name' },
+    { key: 'relation', page: 1, x: 306, w: 209.6, line: 339.8, src: 'member', label: 'S/o / D/o / W/o' },
+    { key: 'address1', page: 1, x: 306, w: 209.6, line: 372.5, src: 'member', label: 'Address line 1' },
+    { key: 'address2', page: 1, x: 306, w: 209.6, line: 389.3, src: 'member', label: 'Address line 2' },
+    { key: 'pan', page: 1, x: 306, w: 209.6, line: 422, src: 'member', label: 'PAN' },
+    { key: 'folio', page: 1, x: 306, w: 209.6, line: 454.7, src: 'member', label: 'Folio no. / shares held' },
+    { key: 'email', page: 1, x: 306, w: 209.6, line: 487.4, src: 'member', label: 'Email' },
+    { key: 'phone', page: 1, x: 306, w: 209.6, line: 520.1, src: 'member', label: 'Phone' },
+    { key: 'resolution_date', page: 2, x: 343.6, w: 95.6, line: 208.3, src: 'setting', align: 'center', label: 'Date of the special resolution' },
+    { key: 'loan_amount', page: 2, x: 241, w: 95.9, line: 355.1, src: 'member', align: 'center', label: 'Loan amount (Rs.)' },
+    { key: 'loan_words_2', from: 'loan_amount_words', page: 2, x: 220, w: 153.4, line: 370.1, src: 'auto', label: 'Loan amount in words' },
+    { key: 'maturity_months', from: 'tenure', page: 2, x: 220, w: 39.6, line: 714.4, src: 'auto', align: 'center', label: 'Tenure (months)' },
+    { key: 'loan_amount_3', from: 'loan_amount', page: 3, x: 352.5, w: 118, line: 687.5, src: 'auto', align: 'center', label: 'Loan amount (Rs.)' },
+    { key: 'loan_words_3', from: 'loan_amount_words', page: 3, x: 102, w: 226.4, line: 704.5, src: 'auto', label: 'Loan amount in words' },
+    { key: 'disburse_days', page: 4, x: 188.5, w: 29.9, line: 100.1, src: 'setting', align: 'center', label: 'Disbursement period (days)' },
+    { key: 'tenure', page: 5, x: 209.8, w: 44.1, line: 395.1, src: 'member', align: 'center', label: 'Tenure (months)' },
+    { key: 'tenure_words', page: 5, x: 262, w: 73.6, line: 395.1, src: 'auto', align: 'center', label: 'Tenure in words' },
+    { key: 'company_sig', page: 11, x: 86, w: 170, line: 516, h: 24, src: 'company', type: 'signature', label: 'Company signature' },
+    { key: 'company_date', page: 11, x: 79.6, w: 209.6, line: 580.6, src: 'company', label: 'Company date' },
+    { key: 'company_place', page: 11, x: 79.6, w: 209.6, line: 612.2, src: 'company', label: 'Company place' },
+    { key: 'member_sig', page: 11, x: 362, w: 150, line: 499, h: 24, src: 'member', type: 'signature', label: 'Your signature' },
+    { key: 'member_name', page: 11, x: 306, w: 209.6, line: 533.4, src: 'auto', label: 'Name' },
+    { key: 'member_date', page: 11, x: 306, w: 209.6, line: 565, src: 'auto', label: 'Date and time' },
+    { key: 'member_place', page: 11, x: 306, w: 209.6, line: 596.6, src: 'member', label: 'Place' },
+    { key: 'bank_holder', page: 12, x: 218, w: 300, line: 145, src: 'member', label: 'Account holder name' },
+    { key: 'bank_name', page: 12, x: 218, w: 300, line: 177.7, src: 'member', label: 'Bank and branch' },
+    { key: 'bank_account', page: 12, x: 218, w: 300, line: 204.5, src: 'member', label: 'Account number' },
+    { key: 'bank_ifsc', page: 12, x: 218, w: 300, line: 231.2, src: 'member', label: 'IFSC' },
+  ] },
+} };
+
+// Retired: offered before the Member Loan Agreement replaced them. Kept so signed copies still show correctly.
+KINDS.shareholder_loan = { title: 'Shareholder Loan Agreement', role: 'investor', group: null, retired: true, layouts: {} };
+KINDS.convertible_note = { title: 'Convertible Debt Note Agreement', role: 'investor', group: null, retired: true, layouts: {} };
 
 // A group is "sign any one of these".
 const GROUPS = {
-  instrument: { title: 'Investment agreement', kinds: ['term_sheet', 'shareholder_loan', 'convertible_note'] },
+  instrument: { title: 'Investment agreement', kinds: ['term_sheet', 'member_loan'] },
 };
 // What each role must sign to become permanent: a document, or one document from a group.
-const ROLE_REQS = { advisor: ['advisory', 'instrument'], investor: ['instrument'] };
+// Advisors: the Advisory Agreement and the Investor Term Sheet or the Member Loan Agreement. Investors: the Term Sheet.
+const ROLE_REQS = { advisor: ['advisory', 'instrument'], investor: ['term_sheet'] };
 // STEAM-IE shareholders (share swap) will get their own onboarding agreement later; until the admin sends
 // one, nothing is shared with them for signing.
 const reqsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : (ROLE_REQS[user.role] || ROLE_REQS.advisor));
@@ -124,6 +198,27 @@ function istDateTime(t) {
 }
 const istDate = (t) => { const p = istParts(t); return `${p.day} ${p.month} ${p.year}`; };
 const utcStamp = (t) => new Date(t).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
+
+/** 500000 → "5,00,000" (Indian grouping). */
+const inr = (n) => Math.round(n).toLocaleString('en-IN');
+/** 550000 → "Five Lakh Fifty Thousand" (Indian numbering). */
+function inWords(n) {
+  n = Math.floor(Math.abs(Number(n) || 0));
+  if (!n) return 'Zero';
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const two = (x) => (x < 20 ? ones[x] : tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : ''));
+  const three = (x) => (x >= 100 ? ones[Math.floor(x / 100)] + ' Hundred' + (x % 100 ? ' ' + two(x % 100) : '') : two(x));
+  const parts = [];
+  const crore = Math.floor(n / 1e7); n %= 1e7;
+  const lakh = Math.floor(n / 1e5); n %= 1e5;
+  const thousand = Math.floor(n / 1000); n %= 1000;
+  if (crore) parts.push(inWords(crore) + ' Crore');
+  if (lakh) parts.push(two(lakh) + ' Lakh');
+  if (thousand) parts.push(two(thousand) + ' Thousand');
+  if (n) parts.push(three(n));
+  return parts.join(' ');
+}
 
 // Helvetica (the PDF's built-in font) can only write Western characters.
 const SAFE = /^[\x20-\x7E -ÿ‘’“”–—…₹]*$/;
@@ -199,12 +294,15 @@ const tplOf = (agOrTpl) => (agOrTpl.ref === undefined ? agOrTpl : templateOf(agO
  * Does this document use blanks found in the PDF (and set up by the admin) rather than measured positions?
  * True for custom agreements, for documents without measured positions, and for any replaced file.
  */
+/** The measured positions for this exact file, if there are any. */
+const measuredFields = (t) => (t && KINDS[t.kind] && KINDS[t.kind].layouts && KINDS[t.kind].layouts[t.sha256] ? KINDS[t.kind].layouts[t.sha256].fields : null);
 function usesBlanks(t, kind = t && t.kind) {
-  if (kind === 'custom' || !KINDS[kind] || !KINDS[kind].fields) return true;
-  return !!(t && (t.fields || needsBlanks(t)));
+  if (kind === 'custom' || !KINDS[kind]) return true;
+  if (!t) return !KINDS[kind].fields;
+  return !!t.fields || !measuredFields(t);
 }
-/** A standard document replaced before blanks were found automatically: its blanks still have to be found. */
-const needsBlanks = (t) => !!t && t.kind !== 'custom' && !t.fields && !!KINDS[t.kind] && !!KINDS[t.kind].fields && t.sha256 !== KINDS[t.kind].sha256;
+/** A standard document without measured positions and whose blanks have not been found yet. */
+const needsBlanks = (t) => !!t && t.kind !== 'custom' && !t.fields && !!KINDS[t.kind] && !measuredFields(t);
 const blanksMode = (agOrTpl) => usesBlanks(tplOf(agOrTpl), agOrTpl.kind);
 /** A template can be signed once its blanks are set up (measured documents are always ready). */
 const isReady = (t) => !!t && !needsBlanks(t) && (t.ready === undefined || t.ready === null || t.ready === 1);
@@ -212,7 +310,7 @@ const isReady = (t) => !!t && !needsBlanks(t) && (t.ready === undefined || t.rea
 /** The fields a document has: measured positions, or the blanks the admin set up. */
 function fieldsOf(agOrTpl) {
   const t = tplOf(agOrTpl);
-  if (!usesBlanks(t, agOrTpl.kind)) return KINDS[agOrTpl.kind].fields;
+  if (!usesBlanks(t, agOrTpl.kind)) return measuredFields(t) || KINDS[agOrTpl.kind].fields;
   const blanks = t && t.fields ? JSON.parse(t.fields) : [];
   const out = [];
   for (const b of blanks) {
@@ -248,7 +346,16 @@ function validateFields(ag, input) {
     address1: v('address1', 60), address2: v('address2', 60), pan: v('pan', 10).toUpperCase(),
     email: v('email', 120), phone: v('phone', 20),
   };
-  if (ag.kind === 'term_sheet') { f.residence = v('residence', 12); f.ticket = v('ticket', 1); }
+  const keys = new Set(fieldsOf(ag).map((x) => x.key));
+  const choices = keys.has('tick_1');
+  if (choices) { f.residence = v('residence', 12); f.ticket = v('ticket', 1); }
+  const loan = keys.has('loan_amount');
+  if (loan) {
+    Object.assign(f, {
+      folio: v('folio', 60), loan_amount: v('loan_amount', 20).replace(/[^\d]/g, ''), tenure: v('tenure', 4).replace(/[^\d]/g, ''),
+      bank_holder: v('bank_holder', 80), bank_name: v('bank_name', 80), bank_account: v('bank_account', 24).replace(/[\s-]/g, '').toUpperCase(), bank_ifsc: v('bank_ifsc', 11).toUpperCase(),
+    });
+  }
   if (f.name.length < 2) errors.push('Enter your full name.');
   if (!['S/o', 'D/o', 'W/o'].includes(f.relation_type)) errors.push('Choose S/o, D/o or W/o.');
   if (f.relation_name.length < 2) errors.push("Enter your father's or spouse's name.");
@@ -256,9 +363,19 @@ function validateFields(ag, input) {
   if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(f.pan)) errors.push('Enter a valid PAN, like ABCDE1234F.');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) errors.push('Enter a valid email address.');
   if (!/^[+0-9][0-9 ()-]{6,19}$/.test(f.phone)) errors.push('Enter a valid phone number.');
-  if (ag.kind === 'term_sheet') {
+  if (choices) {
     if (!['resident', 'nonresident'].includes(f.residence)) errors.push('Choose your residential status.');
     if (!['1', '2'].includes(f.ticket)) errors.push('Choose a ticket size.');
+  }
+  if (loan) {
+    if (f.folio.length < 1) errors.push('Enter your folio number or the number of equity shares you hold.');
+    const amount = Number(f.loan_amount), tenure = Number(f.tenure);
+    if (!(amount >= 1000 && amount <= 1e10)) errors.push('Enter the loan amount in rupees, for example 500000.');
+    if (!(Number.isInteger(tenure) && tenure >= 3 && tenure <= 120)) errors.push('Enter the tenure in months: at least 3, and no more than 36 (up to 120 only for a convertible note under Clause 8.2(a)).');
+    if (f.bank_holder.length < 2) errors.push('Enter the bank account holder name.');
+    if (f.bank_name.length < 2) errors.push('Enter the bank and branch.');
+    if (!/^[0-9A-Z]{6,20}$/.test(f.bank_account)) errors.push('Enter a valid bank account number.');
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(f.bank_ifsc)) errors.push('Enter a valid IFSC, like HDFC0001234.');
   }
   for (const [k, val] of Object.entries(f)) if (!SAFE.test(val)) { errors.push(`Please use English letters only (${k.replace('_', ' ')}).`); break; }
   return { fields: f, errors };
@@ -275,6 +392,10 @@ function values(ag, opts = {}) {
     member_name: memberName, member_place: ag.member_place,
     member_date: ag.member_signed_at ? istDateTime(ag.member_signed_at) : '',
     ticket_chosen: TICKETS[f.ticket] || '',
+    loan_amount: f.loan_amount ? inr(Number(f.loan_amount)) : '',
+    loan_amount_words: f.loan_amount ? inWords(Number(f.loan_amount)) : '',
+    tenure: f.tenure || '', tenure_words: f.tenure ? inWords(Number(f.tenure)).toLowerCase() : '',
+    resolution_date: getSettings().loan_resolution_date || '', disburse_days: getSettings().loan_disburse_days || '',
     _choices: { residence: f.residence, ticket: f.ticket },
   };
   const company = opts.withCompany && ag.company_signed_at;
@@ -337,7 +458,7 @@ async function buildPdf(ag, { withCompany = false, certificate = false } = {}) {
       continue;
     }
     if (fd.src === 'company' && !withCompany) continue;
-    const text = pdfSafe(vals[fd.key]);
+    const text = pdfSafe(vals[fd.from || fd.key]);
     if (!text) continue;
     let size = fd.size || 10;
     while (size > 6 && font.widthOfTextAtSize(text, size) > fd.w - 4) size -= 0.5;
@@ -581,6 +702,18 @@ function closeSiblings(ag, ip) {
 }
 const NOT_NEEDED = 'Not needed:';
 
+// Unsigned copies of retired documents are withdrawn, and their uploads are no longer offered.
+(function retire() {
+  const retired = Object.keys(KINDS).filter((k) => KINDS[k].retired);
+  const marks = retired.map(() => '?').join(',');
+  const open = db.prepare(`SELECT id FROM agreements WHERE status = 'pending' AND kind IN (${marks})`).all(...retired);
+  for (const a of open) {
+    db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(`${NOT_NEEDED} this agreement is no longer used`, Date.now(), a.id);
+    logEvent(a.id, 'System', 'Withdrawn', 'agreement no longer used', null);
+  }
+  db.prepare(`UPDATE agreement_templates SET active = 0 WHERE active = 1 AND kind IN (${marks})`).run(...retired);
+})();
+
 /** "Advisory Agreement and one of: Investor Term Sheet, Shareholder Loan Agreement or Convertible Debt Note Agreement" */
 function describe(rows) {
   const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}` : a[0] || '');
@@ -670,7 +803,7 @@ function publicAgreement(ag, { admin = false } = {}) {
 
 module.exports = {
   KINDS, GROUPS, MODES, TICKETS, CONSENT, NOT_NEEDED, kindsForRole, kindsFor, reqsFor, expand, groupOf, chosenIn, closeSiblings, describe,
-  usesBlanks, needsBlanks, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  usesBlanks, needsBlanks, measuredFields, inWords, inr, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

@@ -11,6 +11,26 @@
     executed: ['Signed by both parties', 'ok'],
   };
   const REQUIRED = ['name', 'relation_name', 'address1', 'pan', 'email', 'phone'];
+  const LOAN_REQUIRED = ['folio', 'loan_amount', 'tenure', 'bank_holder', 'bank_name', 'bank_account', 'bank_ifsc'];
+
+  /** 550000 → "Five Lakh Fifty Thousand" (Indian numbering, as printed on the agreement). */
+  function inWords(n) {
+    n = Math.floor(Math.abs(Number(n) || 0));
+    if (!n) return 'Zero';
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const two = (x) => (x < 20 ? ones[x] : tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : ''));
+    const three = (x) => (x >= 100 ? ones[Math.floor(x / 100)] + ' Hundred' + (x % 100 ? ' ' + two(x % 100) : '') : two(x));
+    const parts = [];
+    const crore = Math.floor(n / 1e7); n %= 1e7;
+    const lakh = Math.floor(n / 1e5); n %= 1e5;
+    const thousand = Math.floor(n / 1000); n %= 1000;
+    if (crore) parts.push(inWords(crore) + ' Crore');
+    if (lakh) parts.push(two(lakh) + ' Lakh');
+    if (thousand) parts.push(two(thousand) + ' Thousand');
+    if (n) parts.push(three(n));
+    return parts.join(' ');
+  }
 
   async function render(el, id, { onChanged }) {
     if (id) return renderSign(el, Number(id), { onChanged });
@@ -102,6 +122,7 @@
     if (ag.status !== 'pending') { location.hash = '#agreements'; return; }
     if (ag.updating) { el.innerHTML = `<div class="card">${emptyHtml('VINC is updating this document. Please check back shortly; you will be able to sign it here.')}</div>`; return; }
     const isTS = ag.kind === 'term_sheet' && !d.spec.custom;
+    const isLoan = ag.kind === 'member_loan' && !d.spec.custom;
     const custom = !!d.spec.custom;
     const customFields = custom ? d.spec.fields.filter((f) => f.src === 'member' && !f.type && !f.placeOf) : [];
     const state = {
@@ -117,6 +138,15 @@
       if (key === 'member_name') return state.fields.name || '';
       if (key === 'member_date') return 'When you sign';
       if (key === 'ticket_chosen') return d.tickets[state.fields.ticket] || '';
+      // Member Loan Agreement: the amount and tenure typed once appear everywhere, with the words written out.
+      const amount = Number(String(state.fields.loan_amount || '').replace(/[^\d]/g, ''));
+      const tenure = Number(String(state.fields.tenure || '').replace(/[^\d]/g, ''));
+      if (key === 'loan_amount_3') return amount ? amount.toLocaleString('en-IN') : '';
+      if (key === 'loan_words_2' || key === 'loan_words_3') return amount ? inWords(amount) : '';
+      if (key === 'maturity_months') return tenure ? String(tenure) : '';
+      if (key === 'tenure_words') return tenure ? inWords(tenure).toLowerCase() : '';
+      if (key === 'resolution_date') return (d.settings && d.settings.resolution_date) || '';
+      if (key === 'disburse_days') return (d.settings && d.settings.disburse_days) || '';
       if (custom && fd) {
         const f = fd;
         if (f.mode === 'member_name') return (VG.me && VG.me.name) || '';
@@ -148,7 +178,19 @@
               <button type="button" data-v="resident">Resident Indian</button><button type="button" data-v="nonresident">Non-Resident</button></div>
               <span class="hint">The other one is struck out on the document.</span></div>
             <div class="field"><span>Ticket size</span><div class="choice-row col" data-choice="ticket">
-              <button type="button" data-v="1"><b>Option 1</b> · Rs. 6,00,000</button><button type="button" data-v="2"><b>Option 2</b> · Rs. 12,00,000</button></div></div>` : ''}`}
+              <button type="button" data-v="1"><b>Option 1</b> · Rs. 6,00,000</button><button type="button" data-v="2"><b>Option 2</b> · Rs. 12,00,000</button></div></div>` : ''}
+          ${isLoan ? `<label class="field"><span>Folio no. / number of equity shares held</span><input class="input" data-k="folio" maxlength="60" placeholder="e.g. Folio 0042 / 1,558 shares"></label>
+            <div class="form-row">
+              <label class="field"><span>Loan amount (Rs.)</span><input class="input mono" data-k="loan_amount" inputmode="numeric" maxlength="15" placeholder="500000"><span class="hint" id="loan-words"></span></label>
+              <label class="field"><span>Tenure (months)</span><input class="input mono" data-k="tenure" inputmode="numeric" maxlength="3" placeholder="12"><span class="hint">At least 3; no more than 36</span></label>
+            </div>
+            <h4 class="label" style="margin:6px 0 8px">Bank account for interest and repayment (Schedule 1)</h4>
+            <label class="field"><span>Account holder name</span><input class="input" data-k="bank_holder" maxlength="80"></label>
+            <label class="field"><span>Bank and branch</span><input class="input" data-k="bank_name" maxlength="80" placeholder="e.g. HDFC Bank, Indiranagar"></label>
+            <div class="form-row">
+              <label class="field"><span>Account number</span><input class="input mono" data-k="bank_account" maxlength="24"></label>
+              <label class="field"><span>IFSC</span><input class="input mono" data-k="bank_ifsc" maxlength="11" placeholder="HDFC0001234" autocapitalize="characters"></label>
+            </div>` : ''}`}
           <h3>2 · Place, date and time</h3>
           <label class="field"><span>Place of signing</span><input class="input" data-k="place" maxlength="60" placeholder="e.g. Bengaluru"></label>
           <div class="geo-row"><button type="button" class="btn btn-soft btn-sm" id="geo-btn">${VG.icon.spark.replace('<svg', '<svg width="14" height="14"')} Add my location <span class="muted">(optional)</span></button><span class="muted small" id="geo-status"></span></div>
@@ -177,7 +219,9 @@
       });
       $$('[data-choice]', panel).forEach((row) => $$('button', row).forEach((b) => b.setAttribute('aria-pressed', String(state.fields[row.dataset.choice] === b.dataset.v))));
       // Progress
-      const req = custom ? customFields.filter((f) => !f.optional).map((f) => f.key) : [...REQUIRED, ...(isTS ? ['residence', 'ticket'] : [])];
+      const req = custom ? customFields.filter((f) => !f.optional).map((f) => f.key) : [...REQUIRED, ...(isTS ? ['residence', 'ticket'] : []), ...(isLoan ? LOAN_REQUIRED : [])];
+      const words = $('#loan-words', panel);
+      if (words) { const n = Number(String(state.fields.loan_amount || '').replace(/[^\d]/g, '')); words.textContent = n ? `Rupees ${inWords(n)} only` : 'Figures only, for example 500000'; }
       const done = req.filter((k) => (state.fields[k] || '').trim()).length + (state.place.trim() ? 1 : 0) + (state.signature ? 1 : 0);
       const total = req.length + 2;
       $('.sp-text', el).textContent = `${done} of ${total} done`;
@@ -190,7 +234,8 @@
       if (k === 'name') pad.setName(v);
       update();
     };
-    $$('[data-k]', panel).forEach((i) => i.addEventListener('input', () => setField(i.dataset.k, i.dataset.k === 'pan' ? i.value.toUpperCase() : i.value)));
+    const UPPER = ['pan', 'bank_ifsc', 'bank_account'];
+    $$('[data-k]', panel).forEach((i) => i.addEventListener('input', () => setField(i.dataset.k, UPPER.includes(i.dataset.k) ? i.value.toUpperCase() : i.value)));
     $$('[data-k]', panel).forEach((i) => { if (i.tagName === 'SELECT') i.addEventListener('change', () => setField(i.dataset.k, i.value)); });
     $$('[data-choice]', panel).forEach((row) => $$('button', row).forEach((b) => b.addEventListener('click', () => setField(row.dataset.choice, b.dataset.v))));
 

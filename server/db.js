@@ -158,7 +158,7 @@ db.exec(`
 -- Onboarding agreements (see server/agreements.js).
 CREATE TABLE IF NOT EXISTS agreement_templates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom')),
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','member_loan','shareholder_loan','convertible_note','custom')),
   title TEXT,
   stored_name TEXT NOT NULL,
   original_name TEXT,
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS agreements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ref TEXT NOT NULL UNIQUE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom')),
+  kind TEXT NOT NULL CHECK (kind IN ('advisory','term_sheet','member_loan','shareholder_loan','convertible_note','custom')),
   template_id INTEGER REFERENCES agreement_templates(id),
   mandatory INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','member_signed','executed','void')),
@@ -205,10 +205,10 @@ function addColumn(table, column, ddl) {
 // The first agreements release only allowed the two built-in documents. Rebuild those tables once so they
 // also accept custom agreements (SQLite cannot change a CHECK in place). Data is copied across unchanged.
 // Older databases only allowed some document kinds; rebuild those tables to allow every kind.
-const KIND_CHECK = "CHECK (kind IN ('advisory','term_sheet','shareholder_loan','convertible_note','custom'))";
+const KIND_CHECK = "CHECK (kind IN ('advisory','term_sheet','member_loan','shareholder_loan','convertible_note','custom'))";
 function relaxKindCheck(table) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
-  const OLD = /CHECK \(kind IN \('advisory','term_sheet'(,'custom')?\)\)/;
+  const OLD = /CHECK \(kind IN \('advisory','term_sheet'(,'shareholder_loan','convertible_note')?(,'custom')?\)\)/;
   if (!row || !OLD.test(row.sql)) return;
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name).join(', ');
   const sql = row.sql.replace(OLD, KIND_CHECK).replace(/^CREATE TABLE (IF NOT EXISTS )?"?\w+"?/, `CREATE TABLE ${table}__new`);

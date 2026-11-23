@@ -11,7 +11,8 @@
     member_signed: ['Countersign needed', 'bad'],
     executed: ['Executed', 'ok'],
   };
-  const FIELD_LABELS = [['name', 'Name'], ['relation', 'S/o / D/o / W/o'], ['address', 'Address'], ['pan', 'PAN'], ['email', 'Email'], ['phone', 'Phone'], ['residence', 'Residential status'], ['ticket', 'Ticket size']];
+  const FIELD_LABELS = [['name', 'Name'], ['relation', 'S/o / D/o / W/o'], ['address', 'Address'], ['pan', 'PAN'], ['email', 'Email'], ['phone', 'Phone'], ['residence', 'Residential status'], ['ticket', 'Ticket size'],
+    ['folio', 'Folio / shares held'], ['loan', 'Loan amount'], ['tenure', 'Tenure'], ['bank', 'Bank account (Schedule 1)']];
 
   let ctx = null;   // { refreshStats, openMember }
 
@@ -22,13 +23,14 @@
     try { d = await VG.api('/api/admin/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const toSign = d.rows.filter((r) => r.status === 'member_signed').length;
     el.innerHTML = `<div class="section-title"><div><h2>Onboarding agreements</h2>
-        <p>Advisors sign the Advisory Agreement <b>and</b> one investment agreement; investors sign one investment agreement. The investment agreements are the Investor Term Sheet, the Shareholder Loan Agreement and the Convertible Debt Note Agreement: members see all three and sign whichever fits. STEAM-IE shareholders get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
+        <p>Advisors sign the Advisory Agreement <b>and</b> one investment agreement: the Investor Term Sheet or the Member Loan Agreement, whichever fits. Investors sign the Investor Term Sheet. STEAM-IE shareholders get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
       <div class="grid grid-2" style="align-items:start">
         <div class="card"><div class="card-head"><h3>Documents</h3></div>
           <p class="muted small" style="margin-top:-6px">Upload each PDF once. It is stored privately on the server and shown to members to fill in and sign. When you upload a new version, its blanks are found automatically and you choose what each one is for.</p>
           <div class="grid" style="gap:12px">${d.templates.filter((t) => !t.group).map(templateCard).join('')}</div>
-          <div class="tpl-group"><p class="label" style="margin:0 0 2px">Investment agreements</p><p class="muted small" style="margin:0 0 10px">Advisors and investors sign any one of these.</p>
-            <div class="grid" style="gap:12px">${d.templates.filter((t) => t.group).map(templateCard).join('')}</div></div></div>
+          <div class="tpl-group"><p class="label" style="margin:0 0 2px">Investment agreements</p><p class="muted small" style="margin:0 0 10px">Advisors sign one of these two. Investors sign the Investor Term Sheet.</p>
+            <div class="grid" style="gap:12px">${d.templates.filter((t) => t.group).map(templateCard).join('')}</div></div>
+          ${loanTerms(d.loan_terms || {})}</div>
         <div class="card" id="company-card">${companyCard(d.company)}</div>
       </div>
       <div class="card" id="custom-card"><div class="card-head"><h3>Other agreements</h3><button type="button" class="btn btn-primary btn-sm" id="custom-new">${VG.icon.plus} Upload an agreement</button></div>
@@ -67,6 +69,14 @@
     $$('[data-view-tpl]', el).forEach((b) => b.addEventListener('click', () => VG.viewer.open({ kind: 'pdf', title: b.dataset.title, src: `/api/admin/agreements/templates/${b.dataset.viewTpl}/raw` })));
 
     bindCompany(el, d.company);
+    const lt = $('#loan-terms', el);
+    if (lt) lt.addEventListener('submit', (e) => {
+      e.preventDefault();
+      VG.busy(lt.querySelector('[type=submit]'), async () => {
+        try { await VG.api('/api/admin/agreements/company', { method: 'PUT', body: { loan_resolution_date: lt.loan_resolution_date.value, loan_disburse_days: lt.loan_disburse_days.value } }); VG.toast('Loan terms saved. They appear on every Member Loan Agreement.', 'ok'); }
+        catch (ex) { VG.toast(ex.message, 'bad'); }
+      });
+    });
     bindCustom(el, d);
 
     const paint = (f) => {
@@ -97,6 +107,17 @@
       <div class="btn-row">${t.uploaded && t.layout === 'blanks' ? `<button class="btn ${t.ready ? 'btn-soft' : 'btn-amber'} btn-xs" data-setup="${t.id}">Set up blanks</button>` : ''}${t.uploaded ? `<button class="btn btn-soft btn-xs" data-view-tpl="${t.kind}" data-title="${VG.esc(t.title)}">View</button>` : ''}
         <label class="btn ${t.uploaded ? 'btn-soft' : 'btn-primary'} btn-xs">${t.uploaded ? 'Replace' : `${VG.icon.upload} Upload`}<input type="file" accept="application/pdf,.pdf" data-upload="${t.kind}" hidden></label></div>
     </div>`;
+  }
+
+  // Two Member Loan Agreement terms set by the company, printed on every copy.
+  function loanTerms(t) {
+    return `<form class="loan-terms" id="loan-terms"><p class="label" style="margin:0 0 2px">Member Loan Agreement: company terms</p>
+      <p class="muted small" style="margin:0 0 10px">Printed on every copy. Left empty, the blank stays empty.</p>
+      <div class="form-row">
+        <label class="field"><span>Special resolution passed on <span class="hint">Recital D</span></span><input class="input" name="loan_resolution_date" value="${VG.esc(t.resolution_date || '')}" placeholder="e.g. 15 October 2026" maxlength="40"></label>
+        <label class="field"><span>Disburse within (days) <span class="hint">Clause 2.2</span></span><input class="input mono" name="loan_disburse_days" value="${VG.esc(t.disburse_days || '')}" inputmode="numeric" maxlength="3" placeholder="7"></label>
+      </div>
+      <button class="btn btn-soft btn-sm" type="submit">Save loan terms</button></form>`;
   }
 
   function companyCard(c) {
@@ -168,7 +189,9 @@
     const f = a.fields || {};
     if (a.kind === 'custom') return Object.entries(f).filter(([, v]) => v).map(([k, v]) => `<tr><th>${VG.esc((labels && labels[k]) || k)}</th><td>${VG.esc(v)}</td></tr>`).join('');
     const val = { ...f, relation: f.relation_type ? `${f.relation_type} ${f.relation_name}` : '', address: [f.address1, f.address2].filter(Boolean).join(', '),
-      residence: f.residence ? (f.residence === 'resident' ? 'Resident Indian' : 'Non-Resident') : '', ticket: f.ticket ? (f.ticket === '2' ? 'Option 2 · Rs. 12,00,000' : 'Option 1 · Rs. 6,00,000') : '' };
+      residence: f.residence ? (f.residence === 'resident' ? 'Resident Indian' : 'Non-Resident') : '', ticket: f.ticket ? (f.ticket === '2' ? 'Option 2 · Rs. 12,00,000' : 'Option 1 · Rs. 6,00,000') : '',
+      loan: f.loan_amount ? `Rs. ${Number(f.loan_amount).toLocaleString('en-IN')}` : '', tenure: f.tenure ? `${f.tenure} months` : '',
+      bank: f.bank_account ? `${f.bank_holder}, ${f.bank_name}, A/c ${f.bank_account}, IFSC ${f.bank_ifsc}` : '' };
     return FIELD_LABELS.filter(([k]) => val[k]).map(([k, l]) => `<tr><th>${l}</th><td>${VG.esc(val[k])}</td></tr>`).join('');
   }
 

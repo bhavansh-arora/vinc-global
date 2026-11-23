@@ -112,7 +112,7 @@ test('STEAM-IE shareholders are investors with no onboarding agreement for now',
   for (let i = 0; i < 9; i++) doc.addPage([595, 842]);
   const fd = new FormData();
   const tsBuf = Buffer.from(await doc.save());
-  require('../server/agreements.js').KINDS.term_sheet.sha256 = require('node:crypto').createHash('sha256').update(tsBuf).digest('hex');   // stand-in for the real file
+  { const K = require('../server/agreements.js').KINDS.term_sheet; K.layouts[require('node:crypto').createHash('sha256').update(tsBuf).digest('hex')] = { fields: K.fields }; }   // stand-in for the real file
   fd.append('file', new Blob([tsBuf], { type: 'application/pdf' }), 'term_sheet.pdf');
   assert.equal((await admin('POST', '/api/admin/agreements/templates/term_sheet', undefined, fd)).status, 200);
 
