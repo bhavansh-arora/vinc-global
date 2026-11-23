@@ -53,10 +53,14 @@ function accessState(u) {
   return u.status; // invited | pending | rejected | revoked
 }
 
-/** "Advisor", "Investor" or "STEAM-IE shareholder". */
+/** Advisors and investors are members; the admin and view-only accounts are not. */
+const isMember = (u) => !!u && (u.role === 'advisor' || u.role === 'investor');
+
+/** "Advisor", "Investor", "STEAM-IE shareholder" or "View only". */
 function memberLabel(u) {
   if (!u) return '';
   if (u.role === 'admin') return 'Admin';
+  if (u.role === 'viewer') return u.organisation ? `${u.organisation} (view only)` : 'View only';
   if (u.role === 'investor' && u.investor_type === 'steam_ie') return 'STEAM-IE shareholder';
   return u.role === 'investor' ? 'Investor' : 'Advisor';
 }
@@ -86,7 +90,7 @@ function requireAdmin(req, res, next) {
 /** Advisors and investors whose access is live right now. */
 function requireMember(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Please log in.' });
-  if (req.user.role === 'admin') return res.status(403).json({ error: 'This area is for advisors and investors.' });
+  if (!isMember(req.user)) return res.status(403).json({ error: 'This area is for advisors and investors.' });
   const state = accessState(req.user);
   if (state !== 'active') return res.status(403).json({ error: 'Your access is not active.', state });
   next();
@@ -94,6 +98,14 @@ function requireMember(req, res, next) {
 
 // Small in-memory limiter for login and signup: 10 attempts per 10 minutes per IP.
 const attempts = new Map();
+/** View-only accounts with live access. */
+function requireViewer(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Please log in.' });
+  if (req.user.role !== 'viewer') return res.status(403).json({ error: 'This area is for view-only accounts.' });
+  if (accessState(req.user) !== 'active') return res.status(403).json({ error: 'Your access is not active.' });
+  next();
+}
+
 function rateLimit(req, res, next) {
   const key = req.ip;
   const now = Date.now();
@@ -117,5 +129,5 @@ function tempHours() {
 
 module.exports = {
   createSession, destroySession, loadUser, accessState, publicUser,
-  memberLabel, requireAuth, requireAdmin, requireMember, rateLimit, clearRateLimit, logAccess, tempHours,
+  isMember, memberLabel, requireAuth, requireAdmin, requireMember, requireViewer, rateLimit, clearRateLimit, logAccess, tempHours,
 };

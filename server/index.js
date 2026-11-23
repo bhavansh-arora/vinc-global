@@ -56,6 +56,7 @@ app.use('/api/admin/chats', require('./routes-chat').admin);
 app.use('/api/admin/agreements', require('./routes-agreements').admin);
 app.use('/api/admin', require('./routes-admin').router);
 app.use('/api/files', require('./routes-files'));
+app.use('/api/cs', require('./routes-cs'));   // view-only accounts
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 
 // Front-end libraries served from node_modules (no CDN needed).
@@ -91,7 +92,7 @@ function page(file) {
 }
 
 // Pages with clean URLs.
-const pages = { '/': 'index.html', '/login': 'login.html', '/signup': 'signup.html', '/advisor': 'advisor.html', '/admin': 'admin.html' };
+const pages = { '/': 'index.html', '/login': 'login.html', '/signup': 'signup.html', '/advisor': 'advisor.html', '/admin': 'admin.html', '/cs': 'cs.html' };
 for (const [route, file] of Object.entries(pages)) {
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');

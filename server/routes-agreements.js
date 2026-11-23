@@ -39,7 +39,7 @@ function readGeo(g) {
 function upgradeIfComplete(userId) {
   if (!AG.requiredDone(userId)) return false;
   const u = userRow(userId);
-  if (!u || u.role === 'admin') return false;
+  if (!u || !A.isMember(u)) return false;
   if (u.status === 'active' && u.access_type === 'permanent') return false;
   const now = Date.now();
   db.prepare("UPDATE users SET status = 'active', access_type = 'permanent', access_expires_at = NULL, approved_at = ?, renewal_requested = 0 WHERE id = ?").run(now, userId);
@@ -209,7 +209,7 @@ function customInfo(t) {
 
 admin.get('/', (_req, res) => {
   const cs = AG.companySettings();
-  const members = db.prepare("SELECT * FROM users WHERE role != 'admin' AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
+  const members = db.prepare("SELECT * FROM users WHERE role IN ('advisor','investor') AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
   const rows = [];
   for (const u of members) {
     const ags = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY id").all(u.id);
@@ -353,7 +353,7 @@ admin.put('/custom/:id', (req, res) => {
     db.prepare('UPDATE agreement_templates SET fields = ?, ready = 1 WHERE id = ?').run(JSON.stringify(blanks), t.id);
     const fresh = AG.templateById(t.id);
     let offered = 0;
-    for (const u of db.prepare("SELECT * FROM users WHERE role != 'admin' AND status = 'active'").all()) {
+    for (const u of db.prepare("SELECT * FROM users WHERE role IN ('advisor','investor') AND status = 'active'").all()) {
       const created = AG.ensureRole(u, 'Admin');
       if (created.length) { offered += created.length; notify.agreementReady(u, AG.describe(created)); }
     }
@@ -407,14 +407,14 @@ admin.post('/send', (req, res) => {
   if (!tpl || !tpl.active) return res.status(400).json({ error: b.kind && AG.KINDS[b.kind] ? `Upload the ${AG.KINDS[b.kind].title} first.` : 'Choose an agreement to send.' });
   if (!AG.isReady(tpl)) return res.status(400).json({ error: `Set up the blanks of the ${AG.titleOf(tpl)} first.` });
   let users;
-  const base = "SELECT * FROM users WHERE role != 'admin' AND status NOT IN ('invited','rejected','revoked')";
+  const base = "SELECT * FROM users WHERE role IN ('advisor','investor') AND status NOT IN ('invited','rejected','revoked')";
   if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
   else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor'").all();   // STEAM-IE shareholders included
   else if (b.audience === 'steam_ie') users = db.prepare(base + " AND role = 'investor' AND investor_type = 'steam_ie'").all();
   else if (b.audience === 'all') users = db.prepare(base).all();
   else {
     const ids = (Array.isArray(b.user_ids) ? b.user_ids : [b.user_id]).map(Number).filter(Boolean).slice(0, 1000);
-    users = ids.map(userRow).filter((u) => u && u.role !== 'admin');
+    users = ids.map(userRow).filter((u) => u && A.isMember(u));
   }
   if (!users.length) return res.status(400).json({ error: 'Choose at least one member.' });
   let sent = 0, reminded = 0, skipped = 0, emailed = 0;

@@ -13,7 +13,7 @@ const company = () => getSettings().company_name || 'VINC';
 
 // Members whose access is live right now and who want update emails.
 function activeRecipients(onlyUserId) {
-  const rows = db.prepare(`SELECT * FROM users WHERE role != 'admin' AND status = 'active' AND email IS NOT NULL AND email != ''
+  const rows = db.prepare(`SELECT * FROM users WHERE role IN ('advisor','investor') AND status = 'active' AND email IS NOT NULL AND email != ''
                            AND email_updates = 1 AND (access_type = 'permanent' OR access_expires_at > ?)`).all(Date.now());
   return onlyUserId ? rows.filter((u) => u.id === onlyUserId) : rows;
 }

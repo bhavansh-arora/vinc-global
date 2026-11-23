@@ -49,7 +49,7 @@ admin.get('/', (_req, res) => {
            (SELECT COUNT(*) FROM messages m WHERE m.advisor_id = u.id) AS total,
            (SELECT COUNT(*) FROM messages m WHERE m.advisor_id = u.id AND m.sender = 'advisor' AND m.read_at IS NULL) AS unread
     FROM users u
-    WHERE u.role != 'admin' AND (u.status != 'invited' OR EXISTS (SELECT 1 FROM messages m WHERE m.advisor_id = u.id))
+    WHERE u.role IN ('advisor','investor') AND (u.status != 'invited' OR EXISTS (SELECT 1 FROM messages m WHERE m.advisor_id = u.id))
     ORDER BY (last_at IS NULL), last_at DESC, u.name COLLATE NOCASE`).all();
   res.json(rows.map((u) => ({
     id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, member_label: A.memberLabel(u), organisation: u.organisation, email: u.email,
@@ -69,7 +69,7 @@ admin.get('/:advisorId', (req, res) => {
 });
 admin.post('/:advisorId', (req, res) => {
   const id = Number(req.params.advisorId);
-  const u = db.prepare("SELECT id FROM users WHERE id = ? AND role != 'admin'").get(id);
+  const u = db.prepare("SELECT id FROM users WHERE id = ? AND role IN ('advisor','investor')").get(id);
   if (!u) return res.status(404).json({ error: 'Member not found.' });
   const body = cleanBody(req.body.body);
   if (!body) return res.status(400).json({ error: 'Type a message first.' });

@@ -9,7 +9,7 @@
     // Already signed in? Go straight to the right place.
     try {
       const { user } = await VG.loadMe();
-      if (user) { location.replace(user.role === 'admin' ? '/admin' : '/advisor'); return; }
+      if (user) { location.replace({ admin: '/admin', viewer: '/cs' }[user.role] || '/advisor'); return; }
     } catch { /* stay */ }
 
     const login = document.getElementById('login-form');
@@ -34,7 +34,7 @@
           const { user } = await VG.api('/api/auth/login', { body: { uid: fd.get('uid').trim(), password: fd.get('password') } });
           btn.textContent = 'Welcome ✓';
           try { sessionStorage.setItem('vg:intro', '1'); } catch { /* the intro is optional */ }
-          setTimeout(() => location.assign(user.role === 'admin' ? '/admin' : '/advisor'), 250);
+          setTimeout(() => location.assign({ admin: '/admin', viewer: '/cs' }[user.role] || '/advisor'), 250);
         } catch (ex) {
           err.textContent = ex.message;
           if (ex.data && ex.data.code === 'signup') err.innerHTML = `${VG.esc(ex.message)} <a href="/signup?uid=${encodeURIComponent(fd.get('uid'))}">Sign up now</a>`;

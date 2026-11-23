@@ -31,6 +31,13 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **Joining VINC animation**: right after login, people walk up in a queue and step through a glowing VINC doorway. The advisor's own figure, tagged "You", is last in line, and when it walks in there's a burst of confetti and the dashboard rises into place card by card. It plays once per login and can be skipped (button or Esc). People who prefer reduced motion don't see it. On the waiting-for-approval screen, the advisor stands at a closed door that swings open and lets them in when the team approves.
 - **Calm ambience**: a soft generated soundscape (Web Audio: slow pads, gentle bells, a faint breath of air), toggled with the equaliser button. Browsers allow sound only after a click, so the portal remembers the choice and starts on the first click.
 
+## View-only access (Company Secretary)
+
+A view-only login sees two things, both view only and watermarked with their ID: **Documents** (everything published in the data room, including documents shared with one member) and **Signed agreements** (every agreement a member has signed, executed or awaiting VINC's countersignature). Nothing else: no member area, no admin area, no downloads. It is never counted, emailed or sent agreements as a member. Every document they open is recorded.
+
+- **In the portal:** Admin → Settings → **View-only access** → **Add a view-only login**. The ID defaults to `VG-CS-01`; a strong password is generated and shown once. The same card gives a new password, shows their activity, revokes or deletes the login.
+- **On the server:** `docker exec vinc-global node server/tools/add-viewer.js "Full Name" VG-CS-01 "Company Secretary"` creates the login (or gives it a new password) and prints the password once.
+
 ## Onboarding agreements
 
 **Advisors** sign the **Advisory Agreement** and **one investment agreement**: the **Investor Term Sheet** or the **Member Loan Agreement** (members see both under "Choose one"; once they sign one, the other is withdrawn). **Investors** sign the **Investor Term Sheet**. **STEAM-IE shareholders** get no agreement automatically: their own share-swap agreement is to be uploaded later under **Other agreements** and sent to **Only STEAM-IE shareholders**. **All investors** always includes STEAM-IE shareholders, so they receive every document sent to investors.

@@ -28,7 +28,7 @@
     chats: ['Questions & answers', 'Answer “Ask the Founder” questions as the founder'],
     settings: ['Settings', 'Portal settings and your password'],
   };
-  const LOG_LABELS = { login: 'Logged in', signup: 'Signed up', approved_temporary: 'Temporary access approved', approved_permanent: 'Permanent access approved', renewal_requested: 'Asked for access again', kyc_uploaded: 'Uploaded KYC', kyc_verified: 'KYC verified', kyc_rejected: 'KYC rejected', kyc_submitted: 'KYC reopened', viewed_document: 'Viewed', downloaded_certificate: 'Downloaded certificate', investment_recorded: 'Investment recorded', certificate_issued: 'Certificate issued', password_changed: 'Password changed', id_generated: 'ID generated', rejected: 'Sign-up rejected', revoked: 'Access revoked', reset: 'ID reset' };
+  const LOG_LABELS = { login: 'Logged in', signup: 'Signed up', approved_temporary: 'Temporary access approved', approved_permanent: 'Permanent access approved', renewal_requested: 'Asked for access again', kyc_uploaded: 'Uploaded KYC', kyc_verified: 'KYC verified', kyc_rejected: 'KYC rejected', kyc_submitted: 'KYC reopened', viewed_document: 'Viewed', viewed_agreement: 'Viewed agreement', downloaded_certificate: 'Downloaded certificate', investment_recorded: 'Investment recorded', certificate_issued: 'Certificate issued', password_changed: 'Password changed', id_generated: 'ID generated', rejected: 'Sign-up rejected', revoked: 'Access revoked', reset: 'ID reset' };
 
   let users = [];
   let stats = null;
@@ -40,7 +40,7 @@
     let me;
     try { me = (await VG.loadMe()).user; } catch { me = null; }
     if (!me) return location.replace('/login');
-    if (me.role !== 'admin') return location.replace('/advisor');
+    if (me.role !== 'admin') return location.replace(me.role === 'viewer' ? '/cs' : '/advisor');
     $$('[data-ic]').forEach((el) => { el.outerHTML = VG.icon[el.dataset.ic] || ''; });
     $('#app').hidden = false;
     $('#menu-toggle').onclick = () => $('#app').classList.add('nav-open');
@@ -977,6 +977,86 @@
   }
 
   // ================================================================ settings
+  // View-only accounts (e.g. the Company Secretary): documents and signed agreements, nothing else.
+  async function paintViewers() {
+    const box = $('#viewers-card');
+    if (!box) return;
+    let list;
+    try { list = await VG.api('/api/admin/viewers'); } catch (e) { box.innerHTML = VG.esc(e.message); return; }
+    box.innerHTML = `<div class="card-head"><h3>View-only access</h3><button class="btn btn-primary btn-sm" type="button" id="vw-new">${VG.icon.plus} Add a view-only login</button></div>
+      <p class="muted small" style="margin-top:-6px">For your Company Secretary or auditor. They see every document in the data room and every signed agreement, view only and watermarked, and nothing else. Every document they open is recorded.</p>
+      <form id="vw-form" class="vw-form" hidden>
+        <div class="form-row">
+          <label class="field"><span>Name</span><input class="input" name="name" required maxlength="120"></label>
+          <label class="field"><span>Designation</span><input class="input" name="organisation" value="Company Secretary" maxlength="80"></label>
+        </div>
+        <div class="form-row">
+          <label class="field"><span>VINC ID <span class="hint">leave empty for VG-CS-01, 02…</span></span><input class="input mono" name="uid" placeholder="VG-CS-01" maxlength="40"></label>
+          <label class="field"><span>Email <span class="hint">optional</span></span><input class="input" type="email" name="email" maxlength="160"></label>
+        </div>
+        <p class="muted small">A strong password is generated and shown to you once. Share it privately; they can change it after logging in.</p>
+        <p class="form-error" id="vw-err"></p>
+        <div class="btn-row"><button class="btn btn-primary btn-sm" type="submit">Create login</button><button class="btn btn-soft btn-sm" type="button" id="vw-cancel">Cancel</button></div>
+      </form>
+      <div id="vw-secret"></div>
+      ${list.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Name</th><th>VINC ID</th><th>Status</th><th>Last login</th><th class="num">Opened</th><th></th></tr></thead><tbody>
+        ${list.map((v) => `<tr><td><b>${VG.esc(v.name || '—')}</b><div class="muted small">${VG.esc(v.organisation || '')}${v.email ? ' · ' + VG.esc(v.email) : ''}</div></td>
+          <td class="mono small">${VG.esc(v.uid)}</td>
+          <td>${v.state === 'active' ? '<span class="chip ok"><span class="dot"></span>Active</span>' : '<span class="chip bad"><span class="dot"></span>Revoked</span>'}</td>
+          <td class="small">${v.last_login_at ? VG.ago(v.last_login_at) : '—'}</td>
+          <td class="num">${v.views}</td>
+          <td><div class="actions"><button class="btn btn-soft btn-xs" data-vw-log="${v.id}">Activity</button><button class="btn btn-soft btn-xs" data-vw-pwd="${v.id}">New password</button>
+            ${v.state === 'active' ? `<button class="btn btn-danger btn-xs" data-vw-revoke="${v.id}">Revoke</button>` : `<button class="btn btn-soft btn-xs" data-vw-restore="${v.id}">Restore</button><button class="btn btn-danger btn-xs" data-vw-del="${v.id}">Delete</button>`}</div></td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted small" style="margin:0">No view-only logins yet.</p>'}`;
+    const form = $('#vw-form', box);
+    $('#vw-new', box).addEventListener('click', () => { form.hidden = false; form.name.focus(); });
+    $('#vw-cancel', box).addEventListener('click', () => { form.hidden = true; form.reset(); });
+    const showSecret = (v, title) => {
+      $('#vw-secret', box).innerHTML = `<div class="id-card vw-secret"><p class="label">${VG.esc(title)}</p>
+        <div class="vw-cred"><span>VINC ID</span><b class="mono">${VG.esc(v.uid)}</b><span>Password</span><b class="mono">${VG.esc(v.password)}</b></div>
+        <p style="margin:6px 0 14px;font-size:.9rem;opacity:.85">This password is shown only now. Copy it and share it privately; they log in at ${VG.esc(location.origin)}/login.</p>
+        <div class="btn-row"><button class="btn btn-amber btn-sm" type="button" data-copy-cred>${VG.icon.copy} Copy login details</button><button class="btn btn-sm" type="button" data-done style="background:color-mix(in srgb,var(--on-band) 14%,transparent);color:var(--on-band)">Done</button></div></div>`;
+      $('[data-copy-cred]', box).addEventListener('click', async () => {
+        const text = `VINC Global (view only)\nLog in: ${location.origin}/login\nVINC ID: ${v.uid}\nPassword: ${v.password}`;
+        try { await navigator.clipboard.writeText(text); VG.toast('Copied.', 'ok'); } catch { VG.confirm(text, { title: 'Copy this', ok: 'Done' }); }
+      });
+      $('[data-done]', box).addEventListener('click', () => { $('#vw-secret', box).innerHTML = ''; });
+    };
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('#vw-err', box).textContent = '';
+      await VG.busy(form.querySelector('[type=submit]'), async () => {
+        try {
+          const v = await VG.api('/api/admin/viewers', { body: Object.fromEntries(new FormData(form)) });
+          await paintViewers();
+          showSecret(v, `View-only login for ${v.name}`);
+        } catch (ex) { $('#vw-err', box).textContent = ex.message; }
+      });
+    });
+    $$('[data-vw-pwd]', box).forEach((b) => b.addEventListener('click', async () => {
+      if (!(await VG.confirm('Their current password stops working and they are logged out.', { title: 'Give them a new password?', ok: 'New password' }))) return;
+      try { const v = await VG.api(`/api/admin/viewers/${b.dataset.vwPwd}/password`, { method: 'POST' }); await paintViewers(); showSecret(v, `New password for ${v.name}`); } catch (e) { fail(e); }
+    }));
+    $$('[data-vw-revoke]', box).forEach((b) => b.addEventListener('click', async () => {
+      if (!(await VG.confirm('They are logged out and can no longer see anything.', { title: 'Revoke this login?', ok: 'Revoke', danger: true }))) return;
+      try { await VG.api(`/api/admin/viewers/${b.dataset.vwRevoke}/revoke`, { method: 'POST' }); paintViewers(); } catch (e) { fail(e); }
+    }));
+    $$('[data-vw-restore]', box).forEach((b) => b.addEventListener('click', async () => {
+      try { await VG.api(`/api/admin/viewers/${b.dataset.vwRestore}/restore`, { method: 'POST' }); paintViewers(); } catch (e) { fail(e); }
+    }));
+    $$('[data-vw-del]', box).forEach((b) => b.addEventListener('click', async () => {
+      if (!(await VG.confirm('The login and its activity record are removed.', { title: 'Delete this login?', ok: 'Delete', danger: true }))) return;
+      try { await VG.api(`/api/admin/viewers/${b.dataset.vwDel}`, { method: 'DELETE' }); paintViewers(); } catch (e) { fail(e); }
+    }));
+    $$('[data-vw-log]', box).forEach((b) => b.addEventListener('click', async () => {
+      let log;
+      try { log = await VG.api(`/api/admin/viewers/${b.dataset.vwLog}/log`); } catch (e) { fail(e); return; }
+      const v = list.find((x) => String(x.id) === b.dataset.vwLog);
+      const label = { login: 'Logged in', viewed_document: 'Viewed document', viewed_agreement: 'Viewed agreement', password_changed: 'Password changed', revoked: 'Access revoked', approved_permanent: 'Access restored', id_generated: 'Login created' };
+      VG.confirm(log.length ? log.map((l) => `${VG.dateTime(l.at)} · ${label[l.action] || l.action}${l.detail ? ': ' + l.detail : ''}`).join('\n') : 'Nothing yet.', { title: `Activity: ${v ? v.name : ''}`, ok: 'Close' });
+    }));
+  }
+
   function renderSettings() {
     const el = viewEl('settings');
     const s = settings;
@@ -997,8 +1077,10 @@
         <label class="field"><span>Confirm new password</span><div class="pwd-wrap"><input class="input" type="password" name="confirm" autocomplete="new-password" required><button type="button"></button></div></label>
         <p class="form-error" id="ap-err"></p>
         <button class="btn btn-primary" type="submit">Change password</button></form></div>
+      <div class="card" id="viewers-card"><div class="viewer-loading" style="min-height:120px"><div class="spinner"></div></div></div>
       <div class="card" id="email-card"><div class="viewer-loading" style="min-height:120px"><div class="spinner"></div></div></div>`;
     paintEmail();
+    paintViewers();
     VG.bindPasswords(el);
     $('#set-form').addEventListener('submit', async (e) => {
       e.preventDefault();

@@ -227,7 +227,7 @@
     // If already signed in, point the header button at the right dashboard.
     VG.loadMe().then(({ user }) => {
       if (!user) return;
-      const dest = user.role === 'admin' ? '/admin' : '/advisor';
+      const dest = { admin: '/admin', viewer: '/cs' }[user.role] || '/advisor';
       document.querySelectorAll('a[href="/login"]').forEach((a) => { a.href = dest; if (a.closest('.nav-auth')) a.textContent = 'Open portal'; });
     }).catch(() => {});
   });

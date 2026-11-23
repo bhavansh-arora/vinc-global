@@ -18,7 +18,7 @@ const HOUR = 3600 * 1000;
 const userRow = (id) => db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 const memberOr404 = (req, res) => {
   const u = userRow(Number(req.params.id));
-  if (!u || u.role === 'admin') { res.status(404).json({ error: 'Member not found.' }); return null; }
+  if (!u || !A.isMember(u)) { res.status(404).json({ error: 'Member not found.' }); return null; }
   return u;
 };
 
@@ -56,14 +56,14 @@ r.get('/stats', (_req, res) => {
   const now = Date.now();
   const one = (sql, ...p) => db.prepare(sql).get(...p).n;
   res.json({
-    members: one("SELECT COUNT(*) AS n FROM users WHERE role != 'admin'"),
+    members: one("SELECT COUNT(*) AS n FROM users WHERE role IN ('advisor','investor')"),
     advisors: one("SELECT COUNT(*) AS n FROM users WHERE role = 'advisor'"),
     investors: one("SELECT COUNT(*) AS n FROM users WHERE role = 'investor'"),
     steam_ie: one("SELECT COUNT(*) AS n FROM users WHERE role = 'investor' AND investor_type = 'steam_ie'"),
     pending: one("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'"),
     invited: one("SELECT COUNT(*) AS n FROM users WHERE status = 'invited'"),
     active_temp: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'temporary' AND access_expires_at > ?", now),
-    active_perm: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'permanent' AND role != 'admin'"),
+    active_perm: one("SELECT COUNT(*) AS n FROM users WHERE status = 'active' AND access_type = 'permanent' AND role IN ('advisor','investor')"),
     kyc_pending: one("SELECT COUNT(*) AS n FROM kyc_docs WHERE status = 'submitted'"),
     requests: one("SELECT COUNT(*) AS n FROM id_requests WHERE status = 'new'"),
     agreements_to_sign: one("SELECT COUNT(*) AS n FROM agreements WHERE status = 'member_signed'"),
@@ -72,7 +72,7 @@ r.get('/stats', (_req, res) => {
     news: one('SELECT COUNT(*) AS n FROM news'),
     invested: db.prepare('SELECT COALESCE(SUM(amount),0) AS n FROM investments').get().n,
     recent: db.prepare(`SELECT l.action, l.detail, l.at, u.uid, u.name FROM access_log l JOIN users u ON u.id = l.user_id
-                        WHERE u.role != 'admin' ORDER BY l.at DESC LIMIT 15`).all(),
+                        WHERE u.role IN ('advisor','investor') ORDER BY l.at DESC LIMIT 15`).all(),
   });
 });
 
@@ -82,7 +82,7 @@ r.get('/users', (_req, res) => {
       (SELECT COUNT(*) FROM kyc_docs k WHERE k.user_id = u.id) AS kyc_count,
       (SELECT COUNT(*) FROM kyc_docs k WHERE k.user_id = u.id AND k.status = 'submitted') AS kyc_pending,
       (SELECT COALESCE(SUM(amount),0) FROM investments i WHERE i.user_id = u.id) AS invested
-    FROM users u WHERE u.role != 'admin' ORDER BY u.created_at DESC`).all();
+    FROM users u WHERE u.role IN ('advisor','investor') ORDER BY u.created_at DESC`).all();
   res.json(rows.map((u) => ({ ...A.publicUser(u), notes: u.notes, kyc_count: u.kyc_count, kyc_pending: u.kyc_pending, invested: u.invested })));
 });
 
@@ -207,6 +207,75 @@ r.delete('/users/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- view-only accounts (e.g. the Company Secretary) ----------
+function newPassword() {
+  // 14 characters from an alphabet without look-alikes, always with letters and digits.
+  const al = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ', dg = '23456789', all = al + dg;
+  for (;;) {
+    let p = '';
+    for (const b of crypto.randomBytes(14)) p += all[b % all.length];
+    if (/[A-Za-z]/.test(p) && /[0-9]/.test(p)) return p;
+  }
+}
+const viewerRow = (id) => { const u = userRow(Number(id)); return u && u.role === 'viewer' ? u : null; };
+const viewerOut = (u) => ({ id: u.id, uid: u.uid, name: u.name, email: u.email, organisation: u.organisation, status: u.status, state: A.accessState(u), created_at: u.created_at, last_login_at: u.last_login_at,
+  views: db.prepare("SELECT COUNT(*) AS n FROM access_log WHERE user_id = ? AND action IN ('viewed_document','viewed_agreement')").get(u.id).n });
+
+r.get('/viewers', (_req, res) => res.json(db.prepare("SELECT * FROM users WHERE role = 'viewer' ORDER BY created_at DESC").all().map(viewerOut)));
+
+r.post('/viewers', (req, res) => {
+  req.body = req.body || {};
+  const name = str(req.body.name, 120);
+  if (!name) return res.status(400).json({ error: 'Enter the person’s name.' });
+  let uid = str(req.body.uid, 40).toUpperCase();
+  if (uid) {
+    if (!/^[A-Z0-9][A-Z0-9-]{3,39}$/.test(uid)) return res.status(400).json({ error: 'IDs use letters, numbers and dashes (4–40 characters).' });
+    if (uid === 'ADMIN' || db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) return res.status(409).json({ error: 'That ID is already taken.' });
+  } else {
+    for (let n = 1; ; n++) { uid = `VG-CS-${String(n).padStart(2, '0')}`; if (!db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) break; }
+  }
+  let password = req.body.password ? String(req.body.password) : '';
+  if (password) { const p = passwordProblem(password); if (p) return res.status(400).json({ error: p }); } else password = newPassword();
+  const now = Date.now();
+  const id = db.prepare("INSERT INTO users (uid, role, name, email, organisation, password_hash, status, access_type, approved_at, signup_at, created_at) VALUES (?, 'viewer', ?, ?, ?, ?, 'active', 'permanent', ?, ?, ?)")
+    .run(uid, name, str(req.body.email, 160) || null, str(req.body.organisation, 80) || 'Company Secretary', bcrypt.hashSync(password, 10), now, now, now).lastInsertRowid;
+  A.logAccess(id, 'id_generated', 'view-only account');
+  // The password is shown to the admin once and never stored in readable form.
+  res.json({ ...viewerOut(userRow(id)), password });
+});
+
+r.post('/viewers/:id/password', (req, res) => {
+  const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });
+  const b = req.body || {};      // the reset is usually sent with no body
+  let password = b.password ? String(b.password) : '';
+  if (password) { const p = passwordProblem(password); if (p) return res.status(400).json({ error: p }); } else password = newPassword();
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(password, 10), u.id);
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+  A.logAccess(u.id, 'password_changed', 'reset by admin');
+  res.json({ ...viewerOut(userRow(u.id)), password });
+});
+
+r.post('/viewers/:id/revoke', (req, res) => setViewerAccess(req, res, true));
+r.post('/viewers/:id/restore', (req, res) => setViewerAccess(req, res, false));
+function setViewerAccess(req, res, revoke) {
+  const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(revoke ? 'revoked' : 'active', u.id);
+  if (revoke) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
+  A.logAccess(u.id, revoke ? 'revoked' : 'approved_permanent', 'view-only account');
+  res.json(viewerOut(userRow(u.id)));
+}
+
+r.get('/viewers/:id/log', (req, res) => {
+  const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });
+  res.json(db.prepare('SELECT action, detail, at FROM access_log WHERE user_id = ? ORDER BY at DESC LIMIT 100').all(u.id));
+});
+
+r.delete('/viewers/:id', (req, res) => {
+  const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+  res.json({ ok: true });
+});
+
 // ---------- news ----------
 const NEWS_COLS = () => require('./routes-auth').NEWS_COLS;
 const yes = (v) => v === true || v === 1 || ['1', 'true', 'on', 'yes'].includes(String(v).toLowerCase());
@@ -256,7 +325,7 @@ r.post('/documents', up.single((req) => (req.body.kind === 'excel' ? 'excel' : '
   if (!title) { cleanup(); return res.status(400).json({ error: 'Give the document a title.' }); }
   const category = CATEGORIES.includes(req.body.category) ? req.body.category : 'general';
   let audience = req.body.audience_user_id ? Number(req.body.audience_user_id) : null;
-  if (audience && !db.prepare("SELECT 1 FROM users WHERE id = ? AND role != 'admin'").get(audience)) audience = null;
+  if (audience && !db.prepare("SELECT 1 FROM users WHERE id = ? AND role IN ('advisor','investor')").get(audience)) audience = null;
   let url = null;
   if (kind === 'link') {
     cleanup();
@@ -317,7 +386,7 @@ r.get('/investments', (_req, res) => {
 });
 r.post('/investments', (req, res) => {
   const userId = Number(req.body.user_id);
-  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role != 'admin'").get(userId)) return res.status(400).json({ error: 'Choose a member.' });
+  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role IN ('advisor','investor')").get(userId)) return res.status(400).json({ error: 'Choose a member.' });
   const amount = Number(req.body.amount), shares = Number(req.body.shares);
   const on = str(req.body.invested_on, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) return res.status(400).json({ error: 'Choose the investment date.' });
@@ -333,7 +402,7 @@ r.delete('/investments/:id', (req, res) => { db.prepare('DELETE FROM investments
 r.post('/certificates', up.single('certificate'), (req, res) => {
   const userId = Number(req.body.user_id);
   const cleanup = () => req.file && up.removeStored(req.file.filename);
-  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role != 'admin'").get(userId)) { cleanup(); return res.status(400).json({ error: 'Choose a member.' }); }
+  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role IN ('advisor','investor')").get(userId)) { cleanup(); return res.status(400).json({ error: 'Choose a member.' }); }
   if (!req.file) return res.status(400).json({ error: 'Choose the certificate file (PDF or image).' });
   db.prepare('INSERT INTO certificates (user_id, title, certificate_no, stored_name, original_name, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(userId, str(req.body.title, 200) || 'Share certificate', str(req.body.certificate_no, 60) || null, req.file.filename, req.file.originalname.slice(0, 200), req.file.vgMime, req.file.size, Date.now());
@@ -373,7 +442,7 @@ r.post('/requests/:id/approve', (req, res) => {
   const q = db.prepare('SELECT * FROM id_requests WHERE id = ?').get(req.params.id);
   if (!q) return res.status(404).json({ error: 'Not found.' });
   if (q.status !== 'new') return res.status(400).json({ error: 'This request has already been handled.' });
-  if (db.prepare("SELECT 1 FROM users WHERE lower(email) = lower(?) AND role != 'admin'").get(q.email)) return res.status(409).json({ error: 'A member with this email already exists.' });
+  if (db.prepare("SELECT 1 FROM users WHERE lower(email) = lower(?) AND role IN ('advisor','investor')").get(q.email)) return res.status(409).json({ error: 'A member with this email already exists.' });
   const { role, investor_type } = memberType(req.body.role, memberType(q.role));
   const now = Date.now();
   const user = tx(() => {

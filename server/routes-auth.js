@@ -79,7 +79,7 @@ r.post('/signup', A.rateLimit, (req, res) => {
   const problem = passwordProblem(password);
   if (problem) return res.status(400).json({ error: problem });
   const u = db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
-  if (!u || u.role === 'admin') return res.status(404).json({ error: 'We could not find that ID. Check it with the VINC team.' });
+  if (!u || !A.isMember(u)) return res.status(404).json({ error: 'We could not find that ID. Check it with the VINC team.' });
   if (u.status !== 'invited') return res.status(409).json({ error: 'This ID is already signed up. Please log in instead.' });
   db.prepare(`UPDATE users SET name = ?, email = ?, phone = ?, organisation = ?, password_hash = ?, status = 'pending', signup_at = ?, renewal_requested = 0 WHERE id = ?`)
     .run(name, email, phone, organisation, bcrypt.hashSync(password, 10), Date.now(), u.id);
@@ -95,7 +95,7 @@ r.post('/logout', (req, res) => { A.destroySession(req, res); res.json({ ok: tru
 // After a temporary window ends, the member asks for access again. It goes back to the admin's queue.
 r.post('/request-renewal', A.requireAuth, (req, res) => {
   const u = req.user;
-  if (u.role === 'admin') return res.status(400).json({ error: 'Not needed for admin.' });
+  if (!A.isMember(u)) return res.status(400).json({ error: 'Not needed for this account.' });
   const state = A.accessState(u);
   if (state !== 'expired') return res.status(400).json({ error: 'Your access does not need renewing right now.' });
   db.prepare("UPDATE users SET status = 'pending', renewal_requested = 1 WHERE id = ?").run(u.id);
@@ -118,7 +118,7 @@ r.post('/request-id', (req, res) => {
   if (!mail.isEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
   hits.push(now); reqHits.set(req.ip, hits);
   const open = db.prepare("SELECT id FROM id_requests WHERE lower(email) = lower(?) AND status = 'new'").get(email);
-  const existing = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND role != 'admin'").get(email);
+  const existing = db.prepare("SELECT id FROM users WHERE lower(email) = lower(?) AND role IN ('advisor','investor')").get(email);
   if (open || existing) return res.json({ ok: true });               // already with the team; don't reveal more
   const row = { name, email, phone: str(b.phone, 40) || null, organisation: str(b.organisation, 160) || null,
     role: b.role === 'investor' ? 'investor' : 'advisor', message: str(b.message, 1500) || null };

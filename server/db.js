@@ -16,7 +16,7 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   uid TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  role TEXT NOT NULL CHECK (role IN ('admin','advisor','investor')),
+  role TEXT NOT NULL CHECK (role IN ('admin','advisor','investor','viewer')),
   name TEXT,
   email TEXT,
   phone TEXT,
@@ -247,6 +247,25 @@ addColumn('news', 'file_mime', 'file_mime TEXT');
 addColumn('news', 'file_size', 'file_size INTEGER');
 // Investors who join through the STEAM-IE share swap ('steam_ie'); NULL for everyone else.
 addColumn('users', 'investor_type', 'investor_type TEXT');
+
+// View-only accounts (e.g. the Company Secretary): older databases only allowed admin, advisor and investor.
+(function allowViewerRole() {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+  const OLD = "CHECK (role IN ('admin','advisor','investor'))";
+  if (!row || !row.sql.includes(OLD)) return;
+  const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name).join(', ');
+  const sql = row.sql.replace(OLD, "CHECK (role IN ('admin','advisor','investor','viewer'))").replace(/^CREATE TABLE (IF NOT EXISTS )?"?users"?/, 'CREATE TABLE users__new');
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    db.exec(sql);
+    db.exec(`INSERT INTO users__new (${cols}) SELECT ${cols} FROM users`);
+    db.exec('DROP TABLE users');
+    db.exec('ALTER TABLE users__new RENAME TO users');
+    db.exec('COMMIT');
+    console.log('[db] upgraded table users for view-only accounts');
+  } catch (e) { db.exec('ROLLBACK'); throw e; } finally { db.exec('PRAGMA foreign_keys = ON'); }
+})();
 
 const DEFAULT_SETTINGS = {
   company_name: 'VINC',

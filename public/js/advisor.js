@@ -39,6 +39,7 @@
     try { me = (await VG.loadMe()).user; } catch { me = null; }
     if (!me) return location.replace('/login');
     if (me.role === 'admin') return location.replace('/admin');
+    if (me.role === 'viewer') return location.replace('/cs');
     playIntro = VG.takeIntroFlag();
     route(me);
   }

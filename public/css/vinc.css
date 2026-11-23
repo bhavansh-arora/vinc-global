@@ -788,6 +788,14 @@ dialog.drawer[open] { animation: vg-drawer-in var(--dur-4) var(--ease-out); }
 .tpl.busy { opacity: .6; pointer-events: none; }
 .tpl-group { margin-top: 16px; padding: 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--plum-soft) 35%, transparent); border: 1px solid color-mix(in srgb, var(--plum) 18%, transparent); }
 .tpl-todo { color: var(--warn); font-weight: 600; }
+.dlg .dlg-body > p.muted { white-space: pre-line; }
+.vw-form { padding: 14px; margin-bottom: 14px; border-radius: var(--radius-sm); border: 1px dashed var(--line); background: var(--card-2); }
+.vw-secret { margin-bottom: 14px; }
+.vw-cred { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline; margin: 6px 0 4px; }
+.vw-cred span { font: 600 .72rem var(--mono); text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+.vw-cred b { font-size: 1.25rem; letter-spacing: .04em; word-break: break-all; }
+.cs-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+.cs-bar .input { max-width: 320px; }
 .loan-terms { margin-top: 14px; padding: 14px; border-radius: var(--radius-sm); border: 1px dashed var(--line); background: var(--card-2); }
 .cfg-std { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--amber-soft); color: var(--ink); }
 /* Member side: "sign any one of these" */

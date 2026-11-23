@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<script src="/js/theme-init.js"></script>
+<link rel="stylesheet" href="/css/vinc.css">
+<title>View-only access · VINC Global</title>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <aside class="side" id="side" aria-label="Navigation">
+    <a class="brand" href="/" data-brand></a>
+    <nav>
+      <a href="#documents" data-view="documents"><span data-ic="vault"></span>Documents<span class="badge" data-count="documents"></span></a>
+      <a href="#signed" data-view="signed"><span data-ic="file"></span>Signed agreements<span class="badge" data-count="signed"></span></a>
+      <a href="#account" data-view="account"><span data-ic="user"></span>Account</a>
+    </nav>
+    <div class="side-foot">
+      <div class="me"><span class="avatar teal" id="me-avatar">CS</span><div class="who"><b id="me-name"></b><span id="me-role">view only</span></div></div>
+      <button class="btn btn-soft btn-sm" type="button" data-logout><span data-ic="logout"></span>Log out</button>
+    </div>
+  </aside>
+  <div class="side-scrim" id="side-scrim"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-toggle" type="button" id="menu-toggle" aria-label="Open menu"><span data-ic="menu"></span></button>
+      <div class="ttl"><h1 id="view-title">Documents</h1><p id="view-sub"></p></div>
+      <div class="tools">
+        <span class="chip hide-sm" title="This account can only view"><span data-ic="lock"></span> View only</span>
+        <button class="icon-btn theme-btn" type="button" data-theme-toggle></button>
+      </div>
+    </header>
+    <main class="content">
+      <section class="view" data-view="documents" hidden></section>
+      <section class="view" data-view="signed" hidden></section>
+      <section class="view" data-view="account" hidden></section>
+    </main>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script src="/js/viewer.js"></script>
+<script src="/js/cs.js"></script>
+</body>
+</html>

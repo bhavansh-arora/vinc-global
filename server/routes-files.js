@@ -12,7 +12,8 @@ const r = express.Router();
 r.use(A.requireAuth);
 
 const isAdmin = (req) => req.user.role === 'admin';
-const isActiveMember = (req) => req.user.role !== 'admin' && A.accessState(req.user) === 'active';
+const isActiveMember = (req) => A.isMember(req.user) && A.accessState(req.user) === 'active';
+const isActiveViewer = (req) => req.user.role === 'viewer' && A.accessState(req.user) === 'active';
 
 function sendStored(res, row, { download = false } = {}) {
   const p = up.storedPath(row.stored_name);
@@ -26,7 +27,7 @@ function sendStored(res, row, { download = false } = {}) {
 }
 
 function canSeeDocument(req, d) {
-  if (isAdmin(req)) return true;
+  if (isAdmin(req) || isActiveViewer(req)) return true;      // view-only accounts see everything published
   if (!isActiveMember(req)) return false;
   return d.audience_user_id == null || d.audience_user_id === req.user.id;
 }
