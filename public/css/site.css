@@ -75,7 +75,9 @@ section { padding: clamp(64px, 9vw, 112px) 0; position: relative; }
 .planet:hover { background: var(--f); color: #fff; scale: 1.06; }
 .planet .pi { width: 28px; height: 28px; border-radius: 50%; background: var(--f); display: grid; place-items: center; color: #fff; }
 .planet .pi svg { width: 16px; height: 16px; }
-.planet.p-lab { --f: var(--amber); } .planet.p-lms { --f: var(--teal); } .planet.p-you { --f: var(--plum); }
+.planet.p-lab { --f: var(--amber); } .planet.p-lms { --f: var(--teal); } .planet.p-you { --f: var(--plum); } .planet.p-code { --f: var(--olive); }
+.orbit-code { background: var(--olive); color: #fff; box-shadow: var(--shadow-sm); }
+.orbit-code:hover { filter: brightness(1.08); }
 .orbit-caption { text-align: center; max-width: 30em; color: var(--ink-2); font-size: var(--t-small); }
 
 /* Ticker */

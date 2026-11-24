@@ -147,7 +147,7 @@
 
     VG.bubbles(document.getElementById('bg-canvas'));
 
-    // Orbit: three planets circle the core; they slow to a stop while the pointer is over the orbit.
+    // Orbit: four planets circle the core; they slow to a stop while the pointer is over the orbit.
     const orbit = document.getElementById('orbit');
     const planets = [...orbit.querySelectorAll('.planet')];
     let angle = 0, speed = 0.0022, target = 0.0022;
