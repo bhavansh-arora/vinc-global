@@ -160,7 +160,7 @@ const GROUPS = {
 const ROLE_REQS = { advisor: ['advisory', 'instrument'], investor: ['term_sheet'] };
 // STEAM-IE shareholders (share swap) will get their own onboarding agreement later; until the admin sends
 // one, nothing is shared with them for signing.
-const reqsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : (ROLE_REQS[user.role] || ROLE_REQS.advisor));
+const reqsFor = (user) => (user.role === 'investor' && user.investor_type === 'steam_ie' ? [] : (ROLE_REQS[user.role] || []));
 const expand = (req) => (GROUPS[req] ? GROUPS[req].kinds : [req]);
 const kindsFor = (user) => reqsFor(user).flatMap(expand);
 const kindsForRole = (role) => (ROLE_REQS[role] || ROLE_REQS.advisor).flatMap(expand);
@@ -318,8 +318,32 @@ const blanksMode = (agOrTpl) => usesBlanks(tplOf(agOrTpl), agOrTpl.kind);
 /** A template can be signed once its blanks are set up (measured documents are always ready). */
 const isReady = (t) => !!t && !needsBlanks(t) && (t.ready === undefined || t.ready === null || t.ready === 1);
 
+/** The other copies of a jointly signed agreement (all of them, including this one), oldest first. */
+function jointRows(ag) {
+  if (!ag || !ag.joint_ref) return ag ? [ag] : [];
+  return db.prepare("SELECT * FROM agreements WHERE joint_ref = ? AND status != 'void' ORDER BY id").all(ag.joint_ref);
+}
+/** Have all signers of a joint agreement signed? (Always true for a single-signer agreement once signed.) */
+const jointComplete = (ag) => jointRows(ag).every((r) => r.status === 'member_signed' || r.status === 'executed');
+/** Who signs a joint agreement, and how far along it is. */
+function jointInfo(ag) {
+  if (!ag || !ag.joint_ref) return null;
+  const rows = jointRows(ag);
+  const signers = rows.map((r) => {
+    const u = db.prepare('SELECT name, uid, role, organisation FROM users WHERE id = ?').get(r.user_id) || {};
+    return { name: u.name || u.uid, uid: u.uid, status: r.status, signed_at: r.member_signed_at };
+  });
+  return { ref: ag.joint_ref, total: rows.length, signed: signers.filter((x) => x.status !== 'pending').length, complete: signers.every((x) => x.status !== 'pending'), signers };
+}
+// Fields that belong to one person; in a joint copy they would collide, so each signer signs on the signature page.
+const PERSONAL = (f) => f.src === 'member' || f.mode === 'member_name' || f.mode === 'member_date';
+
 /** The fields a document has: measured positions, or the blanks the admin set up. */
 function fieldsOf(agOrTpl) {
+  if (agOrTpl.ref !== undefined && agOrTpl.joint_ref) return fieldsOfTemplate(agOrTpl).filter((f) => !PERSONAL(f));
+  return fieldsOfTemplate(agOrTpl);
+}
+function fieldsOfTemplate(agOrTpl) {
   const t = tplOf(agOrTpl);
   if (!usesBlanks(t, agOrTpl.kind)) return measuredFields(t) || KINDS[agOrTpl.kind].fields;
   const blanks = t && t.fields ? JSON.parse(t.fields) : [];
@@ -482,66 +506,84 @@ async function buildPdf(ag, { withCompany = false, certificate = false } = {}) {
   if (blanksMode(ag)) await addSignaturePage(pdf, ag, { font, bold, withCompany, vals });
 
   if (certificate) {
+    // The certificate can run over several pages (one block per signer), so pages are numbered after it.
+    const firstCert = pdf.getPageCount() + 1;
+    await addCertificate(pdf, ag, { font, bold, firstPage: firstCert });
     const all = pdf.getPages();
-    const total = all.length + 1;
     all.forEach((page, i) => {
-      page.drawText(pdfSafe(`Ref ${ag.ref}  ·  Electronically executed via VINC Global (vinc-global.com)  ·  Page ${i + 1} of ${total}`),
+      page.drawText(pdfSafe(`Ref ${ag.joint_ref || ag.ref}  ·  Electronically executed via VINC Global (vinc-global.com)  ·  Page ${i + 1} of ${all.length}`),
         { x: 36, y: 12, size: 6.5, font, color: rgb(0.45, 0.38, 0.32) });
     });
-    await addCertificate(pdf, ag, { font, bold, total });
   }
   return Buffer.from(await pdf.save());
 }
 
 async function addSignaturePage(pdf, ag, { font, bold, withCompany, vals }) {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(ag.user_id) || {};
   const cs = companySettings();
   const W = 595.2, H = 841.92, M = 56;
-  const page = pdf.addPage([W, H]);
   const inkc = rgb(0.17, 0.1, 0.06), muted = rgb(0.43, 0.33, 0.26), amber = rgb(0.6, 0.36, 0.04), line = rgb(0.86, 0.8, 0.68), ink = rgb(0.06, 0.13, 0.36);
-  let y = H - M - 10;
-  page.drawText('SIGNATURE PAGE', { x: M, y, size: 9, font: bold, color: amber }); y -= 26;
-  page.drawText(pdfSafe(titleOf(ag)), { x: M, y, size: 18, font: bold, color: inkc }); y -= 20;
-  page.drawText(pdfSafe(`Ref ${ag.ref}. The parties have signed this document electronically as set out below.`), { x: M, y, size: 9.5, font, color: muted });
-  y -= 40;
-  const colW = (W - 2 * M - 24) / 2;
-  const block = async (x, heading, sigFile, rows) => {
-    let yy = y;
-    page.drawRectangle({ x, y: yy - 250, width: colW, height: 262, borderColor: line, borderWidth: 1 });
-    page.drawText(pdfSafe(heading), { x: x + 14, y: yy - 8, size: 10.5, font: bold, color: amber });
+  const BLOCK = 262, colW = (W - 2 * M - 24) / 2;
+  // The company first, then each person who signs (one for a single-signer agreement).
+  const blocks = [{ heading: 'For VINC DEEPTECH PRIVATE LIMITED', sig: withCompany ? ag.company_sig : null, rows: [
+    ['NAME', cs.signer_name], ['DESIGNATION', cs.signer_title],
+    ['DATE AND TIME', withCompany && ag.company_signed_at ? istDateTime(ag.company_signed_at) : ''],
+    ['PLACE', withCompany ? ag.company_place : ''],
+  ] }];
+  for (const r of jointRows(ag)) {
+    const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.user_id) || {};
+    const f = r.fields ? (typeof r.fields === 'string' ? JSON.parse(r.fields) : r.fields) : {};
+    blocks.push({ heading: `THE ${partyTitleOf(u).toUpperCase()}`, sig: r.member_sig, rows: [
+      ['NAME', r.id === ag.id ? vals.member_name : (f.name || u.name || '')], ['VINC ID', u.uid],
+      ['DATE AND TIME', r.member_signed_at ? istDateTime(r.member_signed_at) : ''],
+      ['PLACE', r.member_place || ''],
+    ] });
+  }
+  let page = null, y = 0;
+  const startPage = (first) => {
+    page = pdf.addPage([W, H]);
+    y = H - M - 10;
+    page.drawText(first ? 'SIGNATURE PAGE' : 'SIGNATURE PAGE (CONTINUED)', { x: M, y, size: 9, font: bold, color: amber }); y -= 26;
+    if (first) {
+      page.drawText(pdfSafe(titleOf(ag)), { x: M, y, size: 18, font: bold, color: inkc }); y -= 20;
+      const who = blocks.length > 2 ? `The company and ${blocks.length - 1} signatories have signed this document electronically as set out below.` : 'The parties have signed this document electronically as set out below.';
+      page.drawText(pdfSafe(`Ref ${ag.joint_ref || ag.ref}. ${who}`), { x: M, y, size: 9.5, font, color: muted });
+      y -= 40;
+    } else y -= 10;
+  };
+  const draw = async (x, top, b) => {
+    let yy = top;
+    page.drawRectangle({ x, y: yy - 250, width: colW, height: BLOCK, borderColor: line, borderWidth: 1 });
+    page.drawText(pdfSafe(b.heading), { x: x + 14, y: yy - 8, size: 10.5, font: bold, color: amber });
     yy -= 34;
     page.drawText('Signature:', { x: x + 14, y: yy - 30, size: 9.5, font, color: inkc });
-    if (sigFile && fs.existsSync(filePath(sigFile))) {
-      const img = await pdf.embedPng(fs.readFileSync(filePath(sigFile)));
-      const s = Math.min((colW - 90) / img.width, 46 / img.height);
-      page.drawImage(img, { x: x + 72, y: yy - 34, width: img.width * s, height: img.height * s });
+    if (b.sig && fs.existsSync(filePath(b.sig))) {
+      const img = await pdf.embedPng(fs.readFileSync(filePath(b.sig)));
+      const sc = Math.min((colW - 90) / img.width, 46 / img.height);
+      page.drawImage(img, { x: x + 72, y: yy - 34, width: img.width * sc, height: img.height * sc });
     }
     page.drawLine({ start: { x: x + 14, y: yy - 38 }, end: { x: x + colW - 14, y: yy - 38 }, thickness: 0.8, color: line });
     yy -= 66;
-    for (const [k, v] of rows) {
+    for (const [k, v] of b.rows) {
       page.drawText(pdfSafe(k), { x: x + 14, y: yy, size: 8, font: bold, color: muted });
       page.drawText(pdfSafe(v || ''), { x: x + 14, y: yy - 13, size: 10, font, color: v ? ink : muted });
       yy -= 32;
     }
   };
-  await block(M, 'For VINC DEEPTECH PRIVATE LIMITED', withCompany ? ag.company_sig : null, [
-    ['NAME', cs.signer_name], ['DESIGNATION', cs.signer_title],
-    ['DATE AND TIME', withCompany && ag.company_signed_at ? istDateTime(ag.company_signed_at) : ''],
-    ['PLACE', withCompany ? ag.company_place : ''],
-  ]);
-  await block(M + colW + 24, user.role === 'investor' ? 'THE INVESTOR' : 'THE ADVISOR', ag.member_sig, [
-    ['NAME', vals.member_name], ['VINC ID', user.uid],
-    ['DATE AND TIME', ag.member_signed_at ? istDateTime(ag.member_signed_at) : ''],
-    ['PLACE', ag.member_place || ''],
-  ]);
+  startPage(true);
+  for (let i = 0; i < blocks.length; i += 2) {
+    if (y - BLOCK < M) startPage(false);
+    await draw(M, y, blocks[i]);
+    if (blocks[i + 1]) await draw(M + colW + 24, y, blocks[i + 1]);
+    y -= BLOCK + 22;
+  }
 }
 
-async function addCertificate(pdf, ag, { font, bold, total }) {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(ag.user_id) || {};
+async function addCertificate(pdf, ag, { font, bold, firstPage }) {
   const tpl = templateOf(ag) || {};
-  const events = db.prepare('SELECT * FROM agreement_events WHERE agreement_id = ? ORDER BY at, id').all(ag.id);
-  const f = typeof ag.fields === 'string' ? JSON.parse(ag.fields) : ag.fields || {};
-  const geo = ag.member_geo ? JSON.parse(ag.member_geo) : null;
+  const copies = jointRows(ag);
+  const ids = copies.map((r) => r.id);
+  const events = db.prepare(`SELECT * FROM agreement_events WHERE agreement_id IN (${ids.map(() => '?').join(',')}) ORDER BY at, id`).all(...ids)
+    .filter((e, i, all) => !(copies.length > 1 && /Countersigned|Agreement executed/.test(e.action) && all.findIndex((o) => o.action === e.action && o.at === e.at) !== i));
   const W = 595.2, H = 841.92, M = 44;
   let page = pdf.addPage([W, H]);
   let y = H - M;
@@ -566,7 +608,7 @@ async function addCertificate(pdf, ag, { font, bold, total }) {
 
   text('VINC GLOBAL', { size: 9, f: bold, color: amber }); y -= 22;
   text('Electronic signature certificate', { size: 20, f: bold }); y -= 18;
-  text(`${titleOf(ag)}  ·  Ref ${ag.ref}  ·  Page ${total} of ${total}`, { size: 9.5, color: muted }); y -= 18;
+  text(`${titleOf(ag)}  ·  Ref ${ag.joint_ref || ag.ref}  ·  from page ${firstPage}`, { size: 9.5, color: muted }); y -= 18;
   rule();
   row('STATUS', `Executed on ${istDateTime(ag.company_signed_at)} (${utcStamp(ag.company_signed_at)})`);
   row('DOCUMENT', `${tpl.original_name || titleOf(ag)}, ${tpl.pages || '?'} pages`);
@@ -588,14 +630,18 @@ async function addCertificate(pdf, ag, { font, bold, total }) {
     }
     y -= 6; rule();
   };
-  const memberName = f.name || user.name;
-  await sigBlock(`Signed by the ${user.role === 'investor' ? 'Investor' : 'Advisor'}`, [
-    ['NAME', memberName], ['VINC ID', user.uid], ['EMAIL', f.email || user.email], ['PHONE', f.phone || user.phone], ...(f.pan ? [['PAN', f.pan]] : []),
-    ['SIGNED AT', `${istDateTime(ag.member_signed_at)} (${utcStamp(ag.member_signed_at)})`],
-    ['PLACE (ENTERED)', ag.member_place],
-    ['LOCATION (DEVICE)', geo ? `${geo.lat.toFixed(5)}, ${geo.lon.toFixed(5)} (accuracy about ${Math.round(geo.acc || 0)} m)` : 'Not shared'],
-    ['IP ADDRESS', ag.member_ip], ['DEVICE', String(ag.member_ua || '').slice(0, 140)],
-  ], ag.member_sig);
+  for (const r of copies) {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(r.user_id) || {};
+    const f = typeof r.fields === 'string' ? JSON.parse(r.fields) : r.fields || {};
+    const geo = r.member_geo ? JSON.parse(r.member_geo) : null;
+    await sigBlock(`Signed by the ${partyTitleOf(user)}${copies.length > 1 ? `: ${f.name || user.name || user.uid}` : ''}`, [
+      ['NAME', f.name || user.name], ['VINC ID', user.uid], ['EMAIL', f.email || user.email], ['PHONE', f.phone || user.phone], ...(f.pan ? [['PAN', f.pan]] : []),
+      ['SIGNED AT', `${istDateTime(r.member_signed_at)} (${utcStamp(r.member_signed_at)})`],
+      ['PLACE (ENTERED)', r.member_place],
+      ['LOCATION (DEVICE)', geo ? `${geo.lat.toFixed(5)}, ${geo.lon.toFixed(5)} (accuracy about ${Math.round(geo.acc || 0)} m)` : 'Not shared'],
+      ['IP ADDRESS', r.member_ip], ['DEVICE', String(r.member_ua || '').slice(0, 140)],
+    ], r.member_sig);
+  }
   await sigBlock('Signed for VINC DEEPTECH PRIVATE LIMITED', [
     ['NAME', ag.company_signer], ['SIGNED AT', `${istDateTime(ag.company_signed_at)} (${utcStamp(ag.company_signed_at)})`],
     ['PLACE', ag.company_place],
@@ -604,7 +650,7 @@ async function addCertificate(pdf, ag, { font, bold, total }) {
   ], ag.company_sig);
 
   ensure(60);
-  text('Consent given by the signer', { size: 11, f: bold }); y -= 16;
+  text(copies.length > 1 ? 'Consent given by each signer' : 'Consent given by the signer', { size: 11, f: bold }); y -= 16;
   for (const l of wrap(CONSENT, W - 2 * M, 9)) { ensure(12); text(l, { size: 9, color: muted }); y -= 12; }
   y -= 6; rule();
   ensure(40);
@@ -619,6 +665,9 @@ async function addCertificate(pdf, ag, { font, bold, total }) {
   ensure(30);
   for (const l of wrap('The SHA-256 fingerprint of this executed file is recorded in VINC Global, so any later change to the file can be detected.', W - 2 * M, 8)) { text(l, { size: 8, color: muted }); y -= 11; }
 }
+
+/** Advisor, Investor, or the designation of a view-only signer (e.g. Director). */
+const partyTitleOf = (u) => require('./auth').partyTitle(u);
 
 // ------------------------------------------------------------------ records
 function logEvent(agreementId, actor, action, detail, ip) {
@@ -653,17 +702,28 @@ function suggestBlanks(blanks) {
 }
 
 function openAgreement(userId, kind, templateId) {
-  if (kind === 'custom') return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND template_id = ? AND status != 'void' ORDER BY id DESC LIMIT 1").get(userId, templateId) || null;
+  if (kind === 'custom') return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND template_id = ? AND status != 'void' AND joint_ref IS NULL ORDER BY id DESC LIMIT 1").get(userId, templateId) || null;
   return db.prepare("SELECT * FROM agreements WHERE user_id = ? AND kind = ? AND status != 'void' ORDER BY id DESC LIMIT 1").get(userId, kind) || null;
 }
 
-function createAgreement(user, tpl, actor) {
+function createAgreement(user, tpl, actor, { jointRef = null } = {}) {
   const kind = tpl.kind;
-  const mandatory = kind === 'custom' ? (tpl.required ? 1 : 0) : 1;
-  const info = db.prepare("INSERT INTO agreements (ref, user_id, kind, template_id, mandatory, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)")
-    .run(newRef(), user.id, kind, tpl.id, mandatory, Date.now(), Date.now());
+  // Everything the admin sends must be signed.
+  const info = db.prepare("INSERT INTO agreements (ref, user_id, kind, template_id, mandatory, joint_ref, status, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, 'pending', ?, ?)")
+    .run(newRef(), user.id, kind, tpl.id, jointRef, Date.now(), Date.now());
   logEvent(info.lastInsertRowid, actor, 'Agreement prepared for signing', titleOf(tpl));
   return db.prepare('SELECT * FROM agreements WHERE id = ?').get(info.lastInsertRowid);
+}
+
+/** One copy for each signer of a jointly signed agreement, sharing a reference. */
+function createJoint(users, tpl, actor) {
+  let ref;
+  do { ref = 'VG-JNT-' + crypto.randomBytes(5).toString('hex').toUpperCase().slice(0, 7); } while (db.prepare('SELECT 1 FROM agreements WHERE joint_ref = ?').get(ref));
+  return users.map((u) => {
+    const ag = createAgreement(u, tpl, actor, { jointRef: ref });
+    logEvent(ag.id, actor, 'Sent for joint signing', `${users.length} signatories, ref ${ref}`);
+    return ag;
+  });
 }
 
 /** Make sure a member has an open agreement for a standard document (kind) or a custom one (template). */
@@ -757,15 +817,19 @@ function companySettings() {
 async function execute(ag, { method, place, sigFile, ip, actor }) {
   const cs = companySettings();
   const now = Date.now();
-  db.prepare(`UPDATE agreements SET company_sig = ?, company_signed_at = ?, company_place = ?, company_signer = ?, company_method = ?, company_ip = ?, updated_at = ? WHERE id = ?`)
-    .run(sigFile, now, place || cs.place, `${cs.signer_name}, ${cs.signer_title}`, method, ip || null, now, ag.id);
-  logEvent(ag.id, actor, method === 'auto' ? 'Countersigned automatically with the saved company signature' : 'Countersigned', `place: ${place || cs.place}`, ip);
-  logEvent(ag.id, 'System', 'Agreement executed', null, null);
+  const copies = jointRows(ag);
+  for (const r of copies) {
+    db.prepare(`UPDATE agreements SET company_sig = ?, company_signed_at = ?, company_place = ?, company_signer = ?, company_method = ?, company_ip = ?, company_fields = COALESCE(?, company_fields), updated_at = ? WHERE id = ?`)
+      .run(sigFile, now, place || cs.place, `${cs.signer_name}, ${cs.signer_title}`, method, ip || null, r.id === ag.id ? null : ag.company_fields || null, now, r.id);
+    logEvent(r.id, actor, method === 'auto' ? 'Countersigned automatically with the saved company signature' : 'Countersigned', `place: ${place || cs.place}`, ip);
+    logEvent(r.id, 'System', 'Agreement executed', null, null);
+  }
   const fresh = db.prepare('SELECT * FROM agreements WHERE id = ?').get(ag.id);
   const bytes = await buildPdf(fresh, { withCompany: true, certificate: true });
   const name = saveFile(bytes, '.pdf');
-  db.prepare("UPDATE agreements SET status = 'executed', executed_name = ?, executed_sha256 = ?, updated_at = ? WHERE id = ?")
-    .run(name, sha256(bytes), Date.now(), ag.id);
+  for (const r of copies) {
+    db.prepare("UPDATE agreements SET status = 'executed', executed_name = ?, executed_sha256 = ?, updated_at = ? WHERE id = ?").run(name, sha256(bytes), Date.now(), r.id);
+  }
   return db.prepare('SELECT * FROM agreements WHERE id = ?').get(ag.id);
 }
 
@@ -803,6 +867,7 @@ function publicAgreement(ag, { admin = false } = {}) {
     id: ag.id, ref: ag.ref, kind: ag.kind, template_id: ag.template_id, title: titleOf(ag), status: ag.status, mandatory: !!ag.mandatory,
     group: groupOf(ag.kind), group_title: groupOf(ag.kind) ? GROUPS[groupOf(ag.kind)].title : null,
     updating: ag.status === 'pending' && !isReady(templateOf(ag)),
+    joint: jointInfo(ag),
     fields: ag.fields ? JSON.parse(ag.fields) : null,
     member_signed_at: ag.member_signed_at, member_place: ag.member_place,
     company_signed_at: ag.company_signed_at, company_place: ag.company_place, company_signer: ag.company_signer, company_method: ag.company_method,
@@ -814,7 +879,7 @@ function publicAgreement(ag, { admin = false } = {}) {
 
 module.exports = {
   KINDS, GROUPS, MODES, TICKETS, CONSENT, NOT_NEEDED, kindsForRole, kindsFor, reqsFor, expand, groupOf, chosenIn, closeSiblings, describe,
-  usesBlanks, needsBlanks, measuredFields, inWords, inr, companyInputs, companyDefaults, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
+  jointRows, jointComplete, jointInfo, createJoint, usesBlanks, needsBlanks, measuredFields, inWords, inr, companyInputs, companyDefaults, blanksMode, isReady, readyTemplate, prepareStandard, suggestBlanks, validateFields, decodeSignature, saveFile, filePath, sha256, SAFE,
   detectBlanks, suggestMode, fieldsOf, titleOf, templateById,
   buildPdf, logEvent, activeTemplate, openAgreement, ensureFor, ensureRole, companySettings, execute, requiredDone, publicAgreement, istDateTime,
 };

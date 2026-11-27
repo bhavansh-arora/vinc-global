@@ -23,7 +23,7 @@ r.get('/agreements', (_req, res) => {
                            FROM agreements a JOIN users u ON u.id = a.user_id
                            WHERE a.status IN ('member_signed','executed') ORDER BY COALESCE(a.company_signed_at, a.member_signed_at) DESC`).all();
   res.json(rows.map((a) => ({
-    id: a.id, ref: a.ref, title: AG.titleOf(a), status: a.status, kind: a.kind,
+    id: a.id, ref: a.joint_ref || a.ref, title: AG.titleOf(a), status: a.status, kind: a.kind, joint: AG.jointInfo(a),
     member: { name: a.member_name, uid: a.member_uid, label: A.memberLabel({ role: a.member_role, investor_type: a.member_type }) },
     member_signed_at: a.member_signed_at, member_place: a.member_place,
     company_signed_at: a.company_signed_at, company_place: a.company_place, company_signer: a.company_signer,

@@ -31,11 +31,12 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 - **Joining VINC animation**: right after login, people walk up in a queue and step through a glowing VINC doorway. The advisor's own figure, tagged "You", is last in line, and when it walks in there's a burst of confetti and the dashboard rises into place card by card. It plays once per login and can be skipped (button or Esc). People who prefer reduced motion don't see it. On the waiting-for-approval screen, the advisor stands at a closed door that swings open and lets them in when the team approves.
 - **Calm ambience**: a soft generated soundscape (Web Audio: slow pads, gentle bells, a faint breath of air), toggled with the equaliser button. Browsers allow sound only after a click, so the portal remembers the choice and starts on the first click.
 
-## View-only access (Company Secretary)
+## View-only access (directors, company secretary, staff)
 
 A view-only login sees two things, both view only and watermarked with their ID: **Documents** (everything published in the data room, including documents shared with one member) and **Signed agreements** (every agreement a member has signed, executed or awaiting VINC's countersignature). Nothing else: no member area, no admin area, no downloads. It is never counted, emailed or sent agreements as a member. Every document they open is recorded.
 
-- **In the portal:** Admin → Settings → **View-only access** → **Add a view-only login**. The ID defaults to `VG-CS-01`; a strong password is generated and shown once. The same card gives a new password, shows their activity, revokes or deletes the login.
+- **In the portal:** Admin → Settings → **Directors, company secretary and staff** → **Add a view-only login**, with a designation (Director, Company Secretary, Employee, Auditor or any other). IDs default to `VG-DIR-01`, `VG-CS-01`, `VG-EMP-01`…; a strong password is generated and shown once.
+- **Signing:** they can be sent any agreement from Agreements → Other agreements (pick them, or use **All directors** / **All directors, company secretary and staff**), and sign it under **To sign** on their page. The same card gives a new password, shows their activity, revokes or deletes the login.
 - **On the server:** `docker exec vinc-global node server/tools/add-viewer.js "Full Name" VG-CS-01 "Company Secretary"` creates the login (or gives it a new password) and prints the password once.
 
 ## Onboarding agreements
@@ -46,9 +47,10 @@ The 2026 versions of all three documents have measured positions for every blank
 
 **New versions.** The original Advisory Agreement and Term Sheet files have measured positions for every blank. Any other file (a replaced version, or the loan and debt note agreements) has its blanks found automatically (underscores, dotted lines, lines drawn on the page such as Word's underlined spaces, and fillable form fields; table borders, page-wide rules and underlined words are left out), and **Set up blanks** opens straight away. Anything missed can be placed with **Add a blank** by clicking the page, and **Find blanks again** re-reads a document while keeping the choices already made so the admin says what each is for. Until it is saved, the document shows to members as "being updated" and cannot be signed; copies nobody has signed yet move to the new version. Both signatures, with date, time and place, also go on a signature page added at the end.
 
-**Other agreements.** The admin can upload any PDF (an NDA, a side letter, an addendum):
+**Other agreements.** The admin can upload any PDF (an NDA, a board resolution, a side letter) and send it to anyone on the portal: members, directors, the company secretary, staff. Everything sent must be signed. It can go out as **one copy each**, or as **one shared copy** that several people sign: each signs (personal blanks are left out; everyone signs on the signature page), the company countersigns once, and everyone gets the same executed PDF with all signatures and a certificate covering each signer. Voiding a shared copy withdraws it for everyone.
+
+The admin uploads it as follows:
 - Its underscore blanks are found automatically. Next to a preview of the document, the admin sets what each one is for: the member fills it in (required or optional), fixed text typed once, the agreement date, a member's or the company's signature, date or place, or left blank.
-- It can be marked **required for permanent membership** or optional.
 - It is sent to selected members, all advisors, all investors or everyone, and each person gets an email.
 - A signature page with both signatures, dates, times and places is added at the end, then the certificate page.
 - It can be withdrawn; unsigned copies are voided and signed ones are kept.

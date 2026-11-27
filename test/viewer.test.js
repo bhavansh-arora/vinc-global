@@ -92,7 +92,10 @@ test('a view-only login sees every document and every signed agreement, and noth
 
   // Nothing else: no member area, no admin area, no changes
   assert.equal((await cs('GET', '/api/member/overview')).status, 403);
-  assert.equal((await cs('GET', '/api/member/agreements')).status, 403);
+  const own = await cs('GET', '/api/member/agreements');
+  assert.equal(own.status, 200, 'they can open agreements sent to them to sign');
+  assert.deepEqual(own.body.agreements, [], 'and are given no standard documents');
+  assert.equal(own.body.waiting_for_template, false);
   assert.equal((await cs('GET', '/api/admin/users')).status, 403);
   assert.equal((await cs('DELETE', `/api/admin/documents/${pub.body.id}`)).status, 403);
   assert.equal((await cs('GET', '/api/chat')).status, 403);
@@ -101,10 +104,11 @@ test('a view-only login sees every document and every signed agreement, and noth
   await m('POST', '/api/auth/login', { uid: member.uid, password: 'abc12345' });
   assert.equal((await m('GET', '/api/cs/documents')).status, 403);
 
-  // Never treated as a member: not listed, not counted, not emailed, not sent agreements
+  // Never treated as a member: not listed, not counted, not emailed, not included in "all members"
   assert.ok(!(await admin('GET', '/api/admin/users')).body.some((x) => x.uid === 'VG-CS-01'));
   assert.equal((await admin('GET', '/api/admin/stats')).body.members, 1);
-  assert.ok(!(await admin('GET', '/api/admin/agreements')).body.members.some((x) => x.uid === 'VG-CS-01'));
+  // ...but they can be picked to sign agreements, under their designation
+  assert.equal((await admin('GET', '/api/admin/agreements')).body.members.find((x) => x.uid === 'VG-CS-01').designation, 'Company Secretary');
   const sent = await admin('POST', '/api/admin/agreements/send', { template_id: tpl2.id, audience: 'all' });
   assert.equal(sent.body.sent + sent.body.reminded + sent.body.skipped, 1);
   mail.sent.length = 0;

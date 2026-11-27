@@ -233,6 +233,12 @@ addColumn('agreements', 'mandatory', 'mandatory INTEGER NOT NULL DEFAULT 1');
 addColumn('agreement_templates', 'ready', 'ready INTEGER NOT NULL DEFAULT 1');
 // Values the company fills in when it countersigns (e.g. the Member Loan Agreement's resolution date).
 addColumn('agreements', 'company_fields', 'company_fields TEXT');
+// Joint signing: copies of one agreement that several people sign share a joint reference.
+addColumn('agreements', 'joint_ref', 'joint_ref TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_agreements_joint ON agreements(joint_ref)');
+// Every agreement the admin sends must be signed (there are no optional ones).
+db.exec("UPDATE agreement_templates SET required = 1 WHERE kind = 'custom' AND required = 0");
+db.exec("UPDATE agreements SET mandatory = 1 WHERE mandatory = 0 AND status != 'void'");
 db.exec('CREATE INDEX IF NOT EXISTS idx_agreements_user ON agreements(user_id, kind)');
 addColumn('users', 'email_updates', 'email_updates INTEGER NOT NULL DEFAULT 1');
 // Links: can the site be shown inside the portal? (see server/links.js)

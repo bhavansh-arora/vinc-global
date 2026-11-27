@@ -8,7 +8,7 @@
 <link rel="icon" href="/img/vinc-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400..800&family=Lora:ital,wght@0,500..700;1,500..700&family=Caveat:wght@500&family=Dancing+Script:wght@600&display=swap">
 <script src="/js/theme-init.js"></script>
 <link rel="stylesheet" href="/css/vinc.css">
 <title>View-only access · VINC Global</title>
@@ -19,6 +19,7 @@
     <a class="brand" href="/" data-brand></a>
     <nav>
       <a href="#documents" data-view="documents"><span data-ic="vault"></span>Documents<span class="badge" data-count="documents"></span></a>
+      <a href="#agreements" data-view="agreements"><span data-ic="spark"></span>To sign<span class="badge" data-count="tosign"></span></a>
       <a href="#signed" data-view="signed"><span data-ic="file"></span>Signed agreements<span class="badge" data-count="signed"></span></a>
       <a href="#account" data-view="account"><span data-ic="user"></span>Account</a>
     </nav>
@@ -39,6 +40,7 @@
     </header>
     <main class="content">
       <section class="view" data-view="documents" hidden></section>
+      <section class="view" data-view="agreements" hidden></section>
       <section class="view" data-view="signed" hidden></section>
       <section class="view" data-view="account" hidden></section>
     </main>
@@ -46,6 +48,8 @@
 </div>
 <script src="/js/common.js"></script>
 <script src="/js/viewer.js"></script>
+<script src="/js/sign.js"></script>
+<script src="/js/member-agreements.js"></script>
 <script src="/js/cs.js"></script>
 </body>
 </html>

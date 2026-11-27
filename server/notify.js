@@ -200,6 +200,9 @@ function idRequested(r) {
 }
 
 // ---------------------------------------------------------------- agreements
+/** Members sign in the member portal; view-only accounts (directors, company secretary) on their own page. */
+const homeOf = (u) => (u && u.role === 'viewer' ? '/cs' : '/advisor');
+
 function agreementReady(u, title) {
   const many = / and |one of/.test(title);      // e.g. "Advisory Agreement and one of: ..."
   return mail.send({
@@ -207,13 +210,14 @@ function agreementReady(u, title) {
     title: many ? 'Your agreements are ready to sign' : `Your ${title} is ready to sign`, greeting: `Hello ${first(u)},`,
     lines: [many ? `Please sign your ${title}, with VINC DEEPTECH PRIVATE LIMITED, in VINC Global.` : `Your ${title} with VINC DEEPTECH PRIVATE LIMITED is ready in VINC Global.`,
       'Fill in your details, sign it on screen and you become a permanent member of the VINC circle once it is countersigned.'],
-    button: { text: `Review and sign`, path: '/advisor#agreements' },
+    button: { text: `Review and sign`, path: `${homeOf(u)}#agreements` },
   });
 }
 function agreementSignedAdmin(u, ag, title) {
   toAdmin({
     kind: 'admin', subject: `${u.name || u.uid} signed the ${title}`, title: 'Ready for your countersignature',
-    lines: [`${u.name || u.uid} (${u.uid}) has signed the ${title}. Countersign it to execute the agreement and make them a permanent member.`],
+    lines: [ag.joint ? `All ${ag.joint.total} signatories have signed the shared copy of the ${title} (${ag.joint.signers.map((s) => s.name).join(', ')}). Countersign it once to execute it for everyone.`
+      : `${u.name || u.uid} (${u.uid}) has signed the ${title}. Countersign it to execute the agreement${require('./auth').isMember(u) ? ' and make them a permanent member' : ''}.`],
     facts: [['Reference', ag.ref], ['Signed at', ag.signedAt], ['Place', ag.member_place || '—']],
     button: { text: 'Countersign', path: '/admin#agreements' },
   });
@@ -225,7 +229,7 @@ function agreementExecuted(u, ag, title, pdfPath) {
     title: 'Your agreement is signed', greeting: `Hello ${first(u)},`,
     lines: [`Your ${title} has been signed by both parties. The executed copy is attached to this email and is always available in VINC Global.`],
     facts: [['Reference', ag.ref]],
-    button: { text: 'Open my agreements', path: '/advisor#agreements' },
+    button: { text: 'Open my agreements', path: `${homeOf(u)}#agreements` },
   });
   toAdmin({ kind: 'admin', subject: `Executed: ${title} with ${u.name || u.uid}`, title: 'Agreement executed', attachments,
     facts: [['Member', `${u.name || '—'} (${u.uid})`], ['Reference', ag.ref]], button: { text: 'Open agreements', path: '/admin#agreements' } });
@@ -235,7 +239,7 @@ function agreementVoided(u, title, reason) {
     to: u.email, kind: 'agreement', subject: `Please sign your ${title} again`,
     title: 'We need a fresh signature', greeting: `Hello ${first(u)},`,
     lines: [`The VINC team has asked you to sign your ${title} again.`], quote: reason || null,
-    button: { text: 'Review and sign', path: '/advisor#agreements' },
+    button: { text: 'Review and sign', path: `${homeOf(u)}#agreements` },
   });
 }
 

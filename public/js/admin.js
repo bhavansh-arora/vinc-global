@@ -983,16 +983,17 @@
     if (!box) return;
     let list;
     try { list = await VG.api('/api/admin/viewers'); } catch (e) { box.innerHTML = VG.esc(e.message); return; }
-    box.innerHTML = `<div class="card-head"><h3>View-only access</h3><button class="btn btn-primary btn-sm" type="button" id="vw-new">${VG.icon.plus} Add a view-only login</button></div>
-      <p class="muted small" style="margin-top:-6px">For your Company Secretary or auditor. They see every document in the data room and every signed agreement, view only and watermarked, and nothing else. Every document they open is recorded.</p>
+    box.innerHTML = `<div class="card-head"><h3>Directors, company secretary and staff</h3><button class="btn btn-primary btn-sm" type="button" id="vw-new">${VG.icon.plus} Add a view-only login</button></div>
+      <p class="muted small" style="margin-top:-6px">View-only logins for directors, your company secretary, employees or an auditor. They see every document in the data room and every signed agreement, view only and watermarked, and sign any agreement you send them from Agreements. Every document they open is recorded.</p>
       <form id="vw-form" class="vw-form" hidden>
         <div class="form-row">
           <label class="field"><span>Name</span><input class="input" name="name" required maxlength="120"></label>
-          <label class="field"><span>Designation</span><input class="input" name="organisation" value="Company Secretary" maxlength="80"></label>
+          <label class="field"><span>Designation</span><input class="input" name="organisation" list="vw-designations" value="Director" maxlength="80" required>
+            <datalist id="vw-designations"><option value="Director"><option value="Company Secretary"><option value="Employee"><option value="Auditor"></datalist></label>
         </div>
         <div class="form-row">
-          <label class="field"><span>VINC ID <span class="hint">leave empty for VG-CS-01, 02…</span></span><input class="input mono" name="uid" placeholder="VG-CS-01" maxlength="40"></label>
-          <label class="field"><span>Email <span class="hint">optional</span></span><input class="input" type="email" name="email" maxlength="160"></label>
+          <label class="field"><span>VINC ID <span class="hint">leave empty to generate one</span></span><input class="input mono" name="uid" placeholder="e.g. VG-DIR-01" maxlength="40"></label>
+          <label class="field"><span>Email <span class="hint">for agreements to sign</span></span><input class="input" type="email" name="email" maxlength="160"></label>
         </div>
         <p class="muted small">A strong password is generated and shown to you once. Share it privately; they can change it after logging in.</p>
         <p class="form-error" id="vw-err"></p>

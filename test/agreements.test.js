@@ -204,11 +204,11 @@ test('admin uploads any agreement, its blanks are found, and it is sent to a gro
   assert.equal(sent.body.sent, 1);
   assert.equal((await admin('POST', '/api/admin/agreements/send', { template_id: up.body.id, audience: 'investors' })).body.reminded, 1);
 
-  // The investor (already permanent) sees and signs it; it is not required, so nothing else changes
+  // The investor (already permanent) sees and signs it; everything the admin sends is required
   await inv('POST', '/api/auth/login', { uid: (await admin('GET', '/api/admin/users')).body.find((u) => u.name === 'Neha Gupta').uid, password: 'Secret123' });
   const nda = (await inv('GET', '/api/member/agreements')).body.agreements.find((a) => a.kind === 'custom');
   assert.equal(nda.title, 'Non-Disclosure Agreement');
-  assert.equal(nda.mandatory, false);
+  assert.equal(nda.mandatory, true);
   const detail = await inv('GET', `/api/member/agreements/${nda.id}`);
   assert.equal(detail.body.spec.custom, true);
   assert.deepEqual(detail.body.spec.fields.map((f) => f.key), ['b1', 'sig2']);

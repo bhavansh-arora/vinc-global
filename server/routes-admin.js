@@ -232,7 +232,9 @@ r.post('/viewers', (req, res) => {
     if (!/^[A-Z0-9][A-Z0-9-]{3,39}$/.test(uid)) return res.status(400).json({ error: 'IDs use letters, numbers and dashes (4–40 characters).' });
     if (uid === 'ADMIN' || db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) return res.status(409).json({ error: 'That ID is already taken.' });
   } else {
-    for (let n = 1; ; n++) { uid = `VG-CS-${String(n).padStart(2, '0')}`; if (!db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) break; }
+    const org = str(req.body.organisation, 80).toLowerCase();
+    const prefix = org.startsWith('director') ? 'VG-DIR-' : org.startsWith('company sec') || !org ? 'VG-CS-' : org.startsWith('employee') ? 'VG-EMP-' : 'VG-VW-';
+    for (let n = 1; ; n++) { uid = `${prefix}${String(n).padStart(2, '0')}`; if (!db.prepare('SELECT 1 FROM users WHERE uid = ?').get(uid)) break; }
   }
   let password = req.body.password ? String(req.body.password) : '';
   if (password) { const p = passwordProblem(password); if (p) return res.status(400).json({ error: p }); } else password = newPassword();

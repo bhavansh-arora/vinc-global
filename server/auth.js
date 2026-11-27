@@ -55,6 +55,10 @@ function accessState(u) {
 
 /** Advisors and investors are members; the admin and view-only accounts are not. */
 const isMember = (u) => !!u && (u.role === 'advisor' || u.role === 'investor');
+/** Anyone the admin can ask to sign: members and view-only accounts (directors, company secretary, staff). */
+const isSigner = (u) => isMember(u) || (!!u && u.role === 'viewer');
+/** How a signer is named on an agreement: Advisor, Investor, or their designation (e.g. Director). */
+const partyTitle = (u) => (!u ? 'Signatory' : u.role === 'investor' ? 'Investor' : u.role === 'advisor' ? 'Advisor' : (u.organisation || 'Signatory'));
 
 /** "Advisor", "Investor", "STEAM-IE shareholder" or "View only". */
 function memberLabel(u) {
@@ -99,6 +103,15 @@ function requireMember(req, res, next) {
 // Small in-memory limiter for login and signup: 10 attempts per 10 minutes per IP.
 const attempts = new Map();
 /** View-only accounts with live access. */
+/** Members and view-only accounts with live access: the agreements they were asked to sign. */
+function requireSigner(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Please log in.' });
+  if (!isSigner(req.user)) return res.status(403).json({ error: 'This area is for people asked to sign agreements.' });
+  const state = accessState(req.user);
+  if (state !== 'active') return res.status(403).json({ error: 'Your access is not active.', state });
+  next();
+}
+
 function requireViewer(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Please log in.' });
   if (req.user.role !== 'viewer') return res.status(403).json({ error: 'This area is for view-only accounts.' });
@@ -129,5 +142,5 @@ function tempHours() {
 
 module.exports = {
   createSession, destroySession, loadUser, accessState, publicUser,
-  isMember, memberLabel, requireAuth, requireAdmin, requireMember, requireViewer, rateLimit, clearRateLimit, logAccess, tempHours,
+  isMember, isSigner, partyTitle, memberLabel, requireAuth, requireAdmin, requireMember, requireViewer, requireSigner, rateLimit, clearRateLimit, logAccess, tempHours,
 };

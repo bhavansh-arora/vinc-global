@@ -11,7 +11,7 @@ const up = require('./uploads');
 
 const member = express.Router();
 const admin = express.Router();
-member.use(A.requireMember);
+member.use(A.requireSigner);   // members, and view-only accounts (directors, company secretary, staff) asked to sign
 admin.use(A.requireAdmin);
 
 const str = (v, max = 200) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
@@ -64,10 +64,16 @@ function readCompanyInputs(ag, input) {
 
 async function executeAndNotify(ag, opts) {
   const done = await AG.execute(ag, opts);
-  const u = userRow(done.user_id);
-  A.logAccess(u.id, 'agreement_executed', AG.titleOf(done));
-  notify.agreementExecuted(u, done, AG.titleOf(done), AG.filePath(done.executed_name));
-  return { done, upgraded: upgradeIfComplete(u.id) };
+  let upgraded = false;
+  // Every signer (one, or all signers of a joint agreement) gets the signed PDF.
+  for (const r of AG.jointRows(done)) {
+    const u = userRow(r.user_id);
+    A.logAccess(u.id, 'agreement_executed', AG.titleOf(r));
+    notify.agreementExecuted(u, r, AG.titleOf(r), AG.filePath(r.executed_name));
+    const up = upgradeIfComplete(u.id);
+    if (r.id === done.id) upgraded = up;
+  }
+  return { done, upgraded };
 }
 
 // ================================================================== member
@@ -81,7 +87,8 @@ function memberList(u) {
       return { ...AG.publicAgreement(r), last_void_reason: (v && v.void_reason) || null };
     }),
     groups: Object.fromEntries(Object.entries(AG.GROUPS).map(([k, g]) => [k, { title: g.title, kinds: g.kinds }])),
-    waiting_for_template: !rows.length && !AG.kindsFor(u).some((k) => AG.readyTemplate(k)),
+    waiting_for_template: A.isMember(u) && !rows.length && !AG.kindsFor(u).some((k) => AG.readyTemplate(k)),
+    viewer: u.role === 'viewer',
     steam_ie: u.investor_type === 'steam_ie',
     all_executed: AG.requiredDone(u.id),
   };
@@ -165,6 +172,11 @@ member.post('/:id/sign', async (req, res) => {
   const cs = AG.companySettings();
   let result = { executed: false, upgraded: false };
   try {
+    const signedRow = agRow(ag.id);
+    if (!AG.jointComplete(signedRow)) {
+      // A joint agreement: the others still have to sign; the company countersigns once everyone has.
+      return res.json({ ...result, waiting_for_others: true, user: A.publicUser(userRow(req.user.id)), ...memberList(userRow(req.user.id)) });
+    }
     const needs = AG.companyInputs(ag);
     const defaults = AG.companyDefaults();
     const autoOk = cs.auto && cs.signature && needs.every((n) => defaults[n.key]);
@@ -173,7 +185,8 @@ member.post('/:id/sign', async (req, res) => {
       const { done, upgraded } = await executeAndNotify(agRow(ag.id), { method: 'auto', place: cs.place, sigFile: cs.signature, ip: null, actor: 'VINC Global' });
       result = { executed: done.status === 'executed', upgraded };
     } else {
-      notify.agreementSignedAdmin(userRow(req.user.id), { ...agRow(ag.id), signedAt: AG.istDateTime(now) }, AG.titleOf(ag));
+      const j = AG.jointInfo(agRow(ag.id));
+      notify.agreementSignedAdmin(userRow(req.user.id), { ...agRow(ag.id), signedAt: AG.istDateTime(now), joint: j }, AG.titleOf(ag));
     }
   } catch (e) {
     console.error('[agreements] execution failed', e);
@@ -209,7 +222,7 @@ function customInfo(t) {
 
 admin.get('/', (_req, res) => {
   const cs = AG.companySettings();
-  const members = db.prepare("SELECT * FROM users WHERE role IN ('advisor','investor') AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
+  const members = db.prepare("SELECT * FROM users WHERE role IN ('advisor','investor','viewer') AND status != 'invited' ORDER BY name COLLATE NOCASE").all();
   const rows = [];
   for (const u of members) {
     const ags = db.prepare("SELECT * FROM agreements WHERE user_id = ? AND status != 'void' ORDER BY id").all(u.id);
@@ -230,7 +243,7 @@ admin.get('/', (_req, res) => {
     custom: db.prepare("SELECT * FROM agreement_templates WHERE kind = 'custom' AND active = 1 ORDER BY id DESC").all().map(customInfo),
     company: { signer_name: cs.signer_name, signer_title: cs.signer_title, place: cs.place, auto: cs.auto, has_signature: !!cs.signature, signature_set_at: cs.signature_set_at },
     loan_terms: (() => { const st = require('./db').getSettings(); return { resolution_date: st.loan_resolution_date || '', disburse_days: st.loan_disburse_days || '' }; })(),
-    members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, label: A.memberLabel(u), state: A.accessState(u), access_type: u.access_type })),
+    members: members.map((u) => ({ id: u.id, uid: u.uid, name: u.name, role: u.role, investor_type: u.investor_type || null, designation: u.role === 'viewer' ? (u.organisation || '') : null, label: A.memberLabel(u), state: A.accessState(u), access_type: u.access_type })),
     rows,
   });
 });
@@ -290,7 +303,7 @@ admin.post('/custom', up.single('pdf'), async (req, res) => {
   const r = await readPdf(req, res); if (!r) return;
   const { blanks, error } = await findBlanks(r.buf);
   const info = db.prepare("INSERT INTO agreement_templates (kind, title, stored_name, original_name, sha256, pages, fields, required, active, uploaded_at) VALUES ('custom', ?, ?, ?, ?, ?, ?, ?, 1, ?)")
-    .run(title, req.file.filename, req.file.originalname.slice(0, 200), AG.sha256(r.buf), r.pages, JSON.stringify(blanks), req.body.required === 'true' || req.body.required === '1' ? 1 : 0, Date.now());
+    .run(title, req.file.filename, req.file.originalname.slice(0, 200), AG.sha256(r.buf), r.pages, JSON.stringify(blanks), 1, Date.now());
   res.json({ ...customDetail(AG.templateById(info.lastInsertRowid)), detect_error: error });
 });
 
@@ -359,9 +372,7 @@ admin.put('/custom/:id', (req, res) => {
     }
     return res.json({ ...customDetail(fresh), offered });
   }
-  const required = req.body.required !== undefined ? (req.body.required ? 1 : 0) : t.required;
-  db.prepare('UPDATE agreement_templates SET title = ?, fields = ?, required = ? WHERE id = ?').run(title, JSON.stringify(blanks), required, t.id);
-  db.prepare("UPDATE agreements SET mandatory = ? WHERE template_id = ? AND status IN ('pending','member_signed')").run(required, t.id);
+  db.prepare('UPDATE agreement_templates SET title = ?, fields = ?, required = 1 WHERE id = ?').run(title, JSON.stringify(blanks), t.id);
   res.json(customDetail(AG.templateById(t.id)));
 });
 
@@ -408,15 +419,28 @@ admin.post('/send', (req, res) => {
   if (!AG.isReady(tpl)) return res.status(400).json({ error: `Set up the blanks of the ${AG.titleOf(tpl)} first.` });
   let users;
   const base = "SELECT * FROM users WHERE role IN ('advisor','investor') AND status NOT IN ('invited','rejected','revoked')";
-  if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
+  const staff = "SELECT * FROM users WHERE role = 'viewer' AND status = 'active'";
+  if (b.audience === 'directors') users = db.prepare(staff + " AND lower(organisation) LIKE 'director%'").all();
+  else if (b.audience === 'viewers') users = db.prepare(staff).all();
+  else if (b.audience === 'advisors') users = db.prepare(base + " AND role = 'advisor'").all();
   else if (b.audience === 'investors') users = db.prepare(base + " AND role = 'investor'").all();   // STEAM-IE shareholders included
   else if (b.audience === 'steam_ie') users = db.prepare(base + " AND role = 'investor' AND investor_type = 'steam_ie'").all();
   else if (b.audience === 'all') users = db.prepare(base).all();
   else {
     const ids = (Array.isArray(b.user_ids) ? b.user_ids : [b.user_id]).map(Number).filter(Boolean).slice(0, 1000);
-    users = ids.map(userRow).filter((u) => u && A.isMember(u));
+    users = ids.map(userRow).filter((u) => u && A.isSigner(u) && !['invited', 'rejected', 'revoked'].includes(u.status));
   }
-  if (!users.length) return res.status(400).json({ error: 'Choose at least one member.' });
+  if (!users.length) return res.status(400).json({ error: 'Choose at least one person.' });
+  if (b.joint) {
+    // Everyone signs one shared copy; the company countersigns once all have signed.
+    if (tpl.kind !== 'custom') return res.status(400).json({ error: 'Only other agreements can be signed jointly.' });
+    if (users.length < 2) return res.status(400).json({ error: 'Choose at least two people to sign one shared copy.' });
+    if (users.length > 40) return res.status(400).json({ error: 'A shared copy can have up to 40 signatories.' });
+    const copies = AG.createJoint(users, tpl, 'Admin');
+    let emailed = 0;
+    for (const u of users) if (notify.agreementReady(u, AG.titleOf(tpl))) emailed++;
+    return res.json({ sent: copies.length, reminded: 0, skipped: 0, emailed, joint: copies[0].joint_ref });
+  }
   let sent = 0, reminded = 0, skipped = 0, emailed = 0;
   for (const u of users) {
     const { agreement, created } = AG.ensureFor(u, tpl, 'Admin');
@@ -507,6 +531,10 @@ admin.post('/:id/countersign', async (req, res) => {
   const ag = agRow(req.params.id);
   if (!ag) return res.status(404).json({ error: 'Not found.' });
   if (ag.status !== 'member_signed') return res.status(409).json({ error: ag.status === 'executed' ? 'Already executed.' : 'The member has not signed yet.' });
+  if (!AG.jointComplete(ag)) {
+    const waiting = AG.jointInfo(ag).signers.filter((s) => s.status === 'pending').map((s) => s.name).join(', ');
+    return res.status(409).json({ error: `Still waiting for ${waiting} to sign this shared copy.` });
+  }
   const cs = AG.companySettings();
   const place = str(req.body.place, 60) || cs.place;
   if (!AG.SAFE.test(place)) return res.status(400).json({ error: 'Please write the place in English letters.' });
@@ -536,7 +564,15 @@ admin.post('/:id/countersign', async (req, res) => {
 admin.post('/:id/void', (req, res) => {
   const ag = agRow(req.params.id);
   if (!ag || ag.status === 'void') return res.status(404).json({ error: 'Not found.' });
-  const reason = str(req.body.reason, 300) || null;
+  const reason = str((req.body || {}).reason, 300) || null;
+  if (ag.joint_ref) {
+    for (const r of AG.jointRows(ag)) {
+      db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(reason, Date.now(), r.id);
+      AG.logEvent(r.id, 'Admin', 'Voided', reason ? `shared copy: ${reason}` : 'shared copy', req.ip);
+      notify.agreementVoided(userRow(r.user_id), AG.titleOf(r), reason);
+    }
+    return res.json({ ok: true, joint: true });
+  }
   db.prepare("UPDATE agreements SET status = 'void', void_reason = ?, updated_at = ? WHERE id = ?").run(reason, Date.now(), ag.id);
   AG.logEvent(ag.id, 'Admin', 'Voided', reason, req.ip);
   const u = userRow(ag.user_id);

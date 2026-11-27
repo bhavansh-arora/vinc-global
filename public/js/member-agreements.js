@@ -39,15 +39,16 @@
     try { d = await VG.api('/api/member/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const me = VG.me || {};
     el.innerHTML = `<div class="section-title"><div><h2>Your agreements</h2>
-        <p>${me.access_type === 'permanent' || (d.steam_ie && !d.agreements.length) ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
+        <p>${d.viewer ? 'Agreements VINC DEEPTECH PRIVATE LIMITED has asked you to sign.' : me.access_type === 'permanent' || (d.steam_ie && !d.agreements.length) ? 'Your agreements with VINC DEEPTECH PRIVATE LIMITED.' : `To become a permanent member, sign your ${VG.esc(requiredNames(d.agreements) || 'onboarding documents')}.`}</p></div></div>
       ${d.waiting_for_template ? `<div class="card">${emptyHtml(d.steam_ie ? 'Your onboarding agreement for the STEAM-IE share swap is being prepared. It will appear here, and you will get an email when it is ready to sign.' : 'The VINC team is preparing your agreement. It will appear here, and you will get an email when it is ready.')}</div>` : ''}
+      ${!d.agreements.length && !d.waiting_for_template ? `<div class="card">${emptyHtml('Nothing to sign right now. When VINC sends you an agreement, it appears here and you get an email.')}</div>` : ''}
       ${listHtml(d)}
       <div class="card agr-note"><h3>How signing works</h3>
         <ol class="agr-how">
           <li><b>Fill in the blanks</b> directly on the document, or in the panel beside it.</li>
           <li><b>Sign</b> by drawing with your finger, mouse or pen, or by typing your name.</li>
           <li><b>We record</b> the date and time, the place you enter, and your IP address. Sharing your location is optional.</li>
-          <li><b>VINC countersigns</b>, you become a permanent member, and the signed PDF is emailed to you.</li>
+          <li><b>VINC countersigns</b>${d.viewer ? '' : ', you become a permanent member,'} and the signed PDF is emailed to you. When several people sign one shared copy, VINC countersigns once everyone has signed.</li>
         </ol></div>`;
     $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => { location.hash = `#agreements/${b.dataset.open}`; }));
     $$('[data-view-pdf]', el).forEach((b) => b.addEventListener('click', () => {
@@ -98,13 +99,16 @@
   function emptyHtml(text) { return `<div class="empty">${VG.icon.file}<p>${VG.esc(text)}</p></div>`; }
 
   function card(a, inChoice) {
-    const [label, cls] = a.updating ? ['Being updated by VINC', ''] : (STATUS[a.status] || [a.status, '']);
+    const waitingForOthers = a.joint && a.status === 'member_signed' && !a.joint.complete;
+    const [label, cls] = a.updating ? ['Being updated by VINC', ''] : waitingForOthers ? ['Signed · waiting for the others', 'teal'] : (STATUS[a.status] || [a.status, '']);
+    const jointLine = a.joint ? `<p class="small agr-joint">${VG.icon.users.replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} One shared copy · ${a.joint.signed} of ${a.joint.total} signed: ${a.joint.signers.map((s) => `${VG.esc(s.name || s.uid)}${s.status !== 'pending' ? ' ✓' : ''}`).join(', ')}</p>` : '';
     return `<article class="card agr-card ${a.status}">
       <span class="agr-ic">${VG.icon.file}</span>
       <div class="agr-main"><p class="label" style="margin:0 0 4px">${VG.esc(a.ref)}</p><h3 style="margin:0 0 6px">${VG.esc(a.title)}</h3>
         <div class="btn-row" style="gap:8px"><span class="chip ${cls}"><span class="dot"></span>${label}</span>${inChoice ? '<span class="chip plum">Option</span>' : a.mandatory ? '<span class="chip">Required</span>' : '<span class="chip">Optional</span>'}
           ${a.member_signed_at ? `<span class="muted small">You signed ${VG.dateTime(a.member_signed_at)}${a.member_place ? ', ' + VG.esc(a.member_place) : ''}</span>` : ''}
           ${a.company_signed_at ? `<span class="muted small">· VINC signed ${VG.dateTime(a.company_signed_at)}</span>` : ''}</div>
+        ${jointLine}
         ${a.last_void_reason && a.status === 'pending' ? `<p class="small" style="margin:8px 0 0;color:var(--bad)">The team asked you to sign again: ${VG.esc(a.last_void_reason)}</p>` : ''}</div>
       <div class="agr-actions">
         ${!a.updating ? `<button class="btn btn-soft ${a.status === 'pending' ? '' : 'btn-sm'}" data-view-pdf="${a.id}" title="Read the full document">${VG.icon.eye} View</button>` : ''}
@@ -299,6 +303,8 @@
         <h2>${r.upgraded ? 'Welcome to the VINC circle' : r.executed ? 'Your agreement is signed' : 'Thank you for signing'}</h2>
         <p class="lead" style="margin-inline:auto">${r.upgraded ? `Your ${VG.esc(title)} is signed by both parties and you are now a <b>permanent member</b>. The signed PDF is on its way to your inbox.`
           : r.executed ? 'Signed by both parties. The signed PDF is on its way to your inbox.'
+            : r.waiting_for_others ? 'Your signature is recorded. This is a shared copy: once everyone else has signed, VINC countersigns and each of you gets the signed PDF by email.'
+            : r.viewer ? 'VINC will countersign shortly. You will get an email with the signed PDF.'
             : 'VINC will countersign shortly. You will get an email with the signed PDF, and your membership becomes permanent.'}</p>
         <div class="btn-row" style="justify-content:center"><a class="btn btn-primary" href="#agreements">See my agreements</a><a class="btn btn-soft" href="#home">Go to home</a></div>
       </div>`;

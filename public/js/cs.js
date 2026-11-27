@@ -12,10 +12,12 @@
   };
   const VIEWS = {
     documents: ['Documents', 'Everything published in the data room · view only'],
+    agreements: ['To sign', 'Agreements VINC has asked you to sign'],
     signed: ['Signed agreements', 'Every agreement signed in the portal · view only'],
     account: ['Account', 'Your login'],
   };
-  const STATUS = { executed: ['Signed by both parties', 'ok'], member_signed: ['Signed by the member · awaiting VINC', 'warn'] };
+  const STATUS = { executed: ['Signed by both parties', 'ok'], member_signed: ['Signed by the member · awaiting VINC', 'warn'], others: ['Shared copy · waiting for other signers', 'teal'] };
+  const statusOf = (a) => (a.status === 'member_signed' && a.joint && !a.joint.complete ? STATUS.others : STATUS[a.status]);
   let me = null, docs = [], signed = [];
 
   document.addEventListener('DOMContentLoaded', async () => {
@@ -32,12 +34,21 @@
     [docs, signed] = await Promise.all([VG.api('/api/cs/documents').catch(() => []), VG.api('/api/cs/agreements').catch(() => [])]);
     $('[data-count=documents]').textContent = docs.length || '';
     $('[data-count=signed]').textContent = signed.length || '';
+    countToSign();
     window.addEventListener('hashchange', show);
     show();
   });
 
+  async function countToSign() {
+    try {
+      const d = await VG.api('/api/member/agreements');
+      const n = d.agreements.filter((a) => a.status === 'pending' && !a.updating).length;
+      $('[data-count=tosign]').textContent = n || '';
+    } catch { /* not asked to sign anything */ }
+  }
+
   function show() {
-    const name = (location.hash || '#documents').slice(1);
+    const [name, sub] = (location.hash || '#documents').slice(1).split('/');
     const view = VIEWS[name] ? name : 'documents';
     $$('.view').forEach((v) => { v.hidden = v.dataset.view !== view; });
     $$('.side nav a').forEach((a) => { if (a.dataset.view === view) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -45,7 +56,9 @@
     $('#view-sub').textContent = VIEWS[view][1];
     $('#app').classList.remove('nav-open');
     document.title = `${VIEWS[view][0]} · VINC Global`;
-    ({ documents: renderDocs, signed: renderSigned, account: renderAccount })[view]();
+    if (view === 'agreements') {
+      VG.memberAgreements.render($('.view[data-view=agreements]'), sub, { onChanged: async () => { countToSign(); signed = await VG.api('/api/cs/agreements').catch(() => signed); $('[data-count=signed]').textContent = signed.length || ''; } });
+    } else ({ documents: renderDocs, signed: renderSigned, account: renderAccount })[view]();
     window.scrollTo({ top: 0 });
   }
   const empty = (icon, text) => `<div class="empty">${VG.icon[icon] || VG.icon.inbox}<p>${VG.esc(text)}</p></div>`;
@@ -90,14 +103,14 @@
       $('#ag-table').innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>Agreement</th><th>Status</th><th>Member signed</th><th>VINC signed</th><th></th></tr></thead><tbody>
         ${rows.map((a) => `<tr><td><b>${VG.esc(a.member.name || '—')}</b><div class="muted small mono">${VG.esc(a.member.uid)} · ${VG.esc(a.member.label)}</div></td>
           <td>${VG.esc(a.title)}<div class="muted small mono">${VG.esc(a.ref)}</div></td>
-          <td><span class="chip ${STATUS[a.status][1]}"><span class="dot"></span>${STATUS[a.status][0]}</span></td>
+          <td><span class="chip ${statusOf(a)[1]}"><span class="dot"></span>${statusOf(a)[0]}</span>${a.joint ? `<div class="muted small">${a.joint.signed} of ${a.joint.total} signed</div>` : ''}</td>
           <td class="small">${a.member_signed_at ? `${VG.dateTime(a.member_signed_at)}<div class="muted">${VG.esc(a.member_place || '')}</div>` : '—'}</td>
           <td class="small">${a.company_signed_at ? `${VG.dateTime(a.company_signed_at)}<div class="muted">${VG.esc(a.company_place || '')}</div>` : '—'}</td>
           <td><button class="btn btn-soft btn-xs" data-view-ag="${a.id}">${VG.icon.eye.replace('<svg', '<svg width="14" height="14"')} View</button></td></tr>`).join('')}
         </tbody></table></div>` : empty('file', signed.length ? 'Nothing matches that search.' : 'No agreements have been signed yet.');
       $$('[data-view-ag]', el).forEach((b) => b.addEventListener('click', () => {
         const a = signed.find((x) => String(x.id) === b.dataset.viewAg);
-        VG.viewer.open({ kind: 'pdf', title: `${a.title} · ${a.ref}`, subtitle: `${a.member.name || a.member.uid} · ${STATUS[a.status][0]}`, src: `/api/cs/agreements/${a.id}/pdf` });
+        VG.viewer.open({ kind: 'pdf', title: `${a.title} · ${a.ref}`, subtitle: `${a.member.name || a.member.uid} · ${statusOf(a)[0]}`, src: `/api/cs/agreements/${a.id}/pdf` });
       }));
     };
     $$('[data-f]', el).forEach((b) => b.addEventListener('click', () => { f = b.dataset.f; $$('[data-f]', el).forEach((x) => x.setAttribute('aria-pressed', String(x === b))); paint(); }));
@@ -113,7 +126,8 @@
         <div class="table-wrap"><table class="t"><tbody>
           <tr><th>Name</th><td>${VG.esc(me.name || '—')}</td></tr>
           <tr><th>VINC ID</th><td class="mono">${VG.esc(me.uid)}</td></tr>
-          <tr><th>Access</th><td>View only: documents and signed agreements</td></tr></tbody></table></div>
+          <tr><th>Designation</th><td>${VG.esc(me.organisation || '—')}</td></tr>
+          <tr><th>Access</th><td>View only: documents and signed agreements; you sign the agreements VINC sends you</td></tr></tbody></table></div>
         <p class="muted small" style="margin:12px 0 0">You can read everything here but cannot change, download or send anything. Each document you open is recorded.</p></div>
       <form class="card" id="pwd-form"><h3>Change password</h3>
         <label class="field"><span>Current password</span><div class="pwd-wrap"><input class="input" type="password" name="current" autocomplete="current-password" required><button type="button"></button></div></label>

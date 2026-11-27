@@ -23,7 +23,7 @@
     try { d = await VG.api('/api/admin/agreements'); } catch (e) { el.innerHTML = `<div class="card">${VG.esc(e.message)}</div>`; return; }
     const toSign = d.rows.filter((r) => r.status === 'member_signed').length;
     el.innerHTML = `<div class="section-title"><div><h2>Onboarding agreements</h2>
-        <p>Advisors sign the Advisory Agreement <b>and</b> one investment agreement: the Investor Term Sheet or the Member Loan Agreement, whichever fits. Investors sign the Investor Term Sheet. STEAM-IE shareholders get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
+        <p>Advisors sign the Advisory Agreement <b>and</b> one investment agreement: the Investor Term Sheet or the Member Loan Agreement, whichever fits. Investors sign the Investor Term Sheet. Directors, the company secretary and staff sign whatever you send them from Other agreements. STEAM-IE shareholders get nothing automatically: send them their own agreement from Other agreements when it is ready. Once everything required is signed by both sides, the member becomes permanent automatically.</p></div></div>
       <div class="grid grid-2" style="align-items:start">
         <div class="card"><div class="card-head"><h3>Documents</h3></div>
           <p class="muted small" style="margin-top:-6px">Upload each PDF once. It is stored privately on the server and shown to members to fill in and sign. When you upload a new version, its blanks are found automatically and you choose what each one is for.</p>
@@ -34,11 +34,10 @@
         <div class="card" id="company-card">${companyCard(d.company)}</div>
       </div>
       <div class="card" id="custom-card"><div class="card-head"><h3>Other agreements</h3><button type="button" class="btn btn-primary btn-sm" id="custom-new">${VG.icon.plus} Upload an agreement</button></div>
-        <p class="muted small" style="margin-top:-6px">Any PDF: an NDA, a side letter, an addendum. Blanks drawn with underscores are found automatically and you choose what each one is for. Both signatures, with date, time and place, go on a signature page added at the end.</p>
+        <p class="muted small" style="margin-top:-6px">Any PDF: an NDA, a board resolution, a side letter. Its blanks are found automatically and you choose what each one is for. Send it to anyone on the portal (members, directors, the company secretary, staff): each signs their own copy, or several people sign one shared copy. Whatever you send must be signed. All signatures, with date, time and place, go on a signature page added at the end.</p>
         <form id="custom-form" class="custom-form" hidden>
           <div class="form-row"><label class="field"><span>Title</span><input class="input" name="title" maxlength="120" required placeholder="e.g. Non-Disclosure Agreement"></label>
             <label class="drop" style="min-height:0;padding:14px">${VG.icon.upload}<b>Choose the PDF</b><span class="file-name"></span><input type="file" name="file" accept="application/pdf,.pdf"></label></div>
-          <label class="check" style="margin-bottom:12px"><input type="checkbox" name="required" value="1"> Required for permanent membership</label>
           <p class="form-error" id="custom-err"></p>
           <div class="btn-row"><button class="btn btn-primary btn-sm" type="submit">Upload and set up blanks</button><button class="btn btn-soft btn-sm" type="button" id="custom-cancel">Cancel</button></div>
         </form>
@@ -84,8 +83,8 @@
       $('#agr-table').innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>Document</th><th>Status</th><th>Member signed</th><th>VINC signed</th><th></th></tr></thead><tbody>
         ${rows.map((r) => `<tr>
           <td><b>${VG.esc(r.user.name || '—')}</b><div class="muted small mono">${VG.esc(r.user.uid)} · ${VG.esc(r.user.member_label || (r.user.role === 'investor' ? 'Investor' : 'Advisor'))}${r.user.access_type === 'permanent' ? ' · permanent' : ''}</div></td>
-          <td>${VG.esc(r.title)} ${r.group ? '<span class="chip plum" style="font-size:.68rem" title="Members sign any one of the investment agreements">One of 3</span>' : r.mandatory ? '' : '<span class="chip" style="font-size:.68rem">Optional</span>'}${r.ref ? `<div class="muted small mono">${VG.esc(r.ref)}</div>` : ''}</td>
-          <td><span class="chip ${STATUS[r.status][1]}"><span class="dot"></span>${STATUS[r.status][0]}</span></td>
+          <td>${VG.esc(r.title)} ${r.group ? '<span class="chip plum" style="font-size:.68rem" title="Members sign one of the investment agreements">Choice</span>' : ''}${r.joint ? `<span class="chip teal" style="font-size:.68rem" title="${VG.esc(r.joint.signers.map((s) => s.name + (s.status !== 'pending' ? ' ✓' : '')).join(', '))}">Shared · ${r.joint.signed}/${r.joint.total}</span>` : ''}${r.ref ? `<div class="muted small mono">${VG.esc(r.joint ? r.joint.ref : r.ref)}</div>` : ''}</td>
+          <td><span class="chip ${rowStatus(r)[1]}"><span class="dot"></span>${rowStatus(r)[0]}</span></td>
           <td class="small">${r.member_signed_at ? `${VG.dateTime(r.member_signed_at)}<div class="muted">${VG.esc(r.member_place || '')}</div>` : '—'}</td>
           <td class="small">${r.company_signed_at ? `${VG.dateTime(r.company_signed_at)}<div class="muted">${VG.esc(r.company_place || '')}${r.company_method === 'auto' ? ' · auto' : ''}</div>` : '—'}</td>
           <td><div class="actions">${actions(r)}</div></td></tr>`).join('')}
@@ -157,11 +156,13 @@
     }));
   }
 
+  const rowStatus = (r) => (r.status === 'member_signed' && r.joint && !r.joint.complete ? ['Signed · waiting for others', 'teal'] : STATUS[r.status]);
+
   function actions(r) {
     if (r.status === 'not_sent') return `<button class="btn btn-soft btn-xs" data-send="${r.user.id}" data-kind="${r.kind}">${VG.icon.send.replace('<svg', '<svg width="13" height="13"')} Send for signature</button>`;
     const parts = [];
-    if (r.status === 'member_signed') parts.push(`<button class="btn btn-amber btn-xs" data-cs="${r.id}">${VG.icon.spark.replace('<svg', '<svg width="13" height="13"')} Review & countersign</button>`);
-    if (r.status === 'pending') parts.push(`<button class="btn btn-soft btn-xs" data-send="${r.user.id}" data-kind="${r.kind}" data-tpl="${r.template_id || ''}">Remind</button>`);
+    if (r.status === 'member_signed' && (!r.joint || r.joint.complete)) parts.push(`<button class="btn btn-amber btn-xs" data-cs="${r.id}">${VG.icon.spark.replace('<svg', '<svg width="13" height="13"')} Review & countersign</button>`);
+    if (r.status === 'pending' && !r.joint) parts.push(`<button class="btn btn-soft btn-xs" data-send="${r.user.id}" data-kind="${r.kind}" data-tpl="${r.template_id || ''}">Remind</button>`);
     parts.push(`<button class="btn btn-soft btn-xs" data-pdf="${r.id}" data-title="${VG.esc(r.title + ' · ' + r.ref)}" data-sub="${r.status === 'executed' ? 'Signed by both parties' : r.status === 'member_signed' ? 'Signed by the member; VINC signature added on countersigning' : 'As the member sees it, before signing'}">View</button>`);
     if (r.status === 'executed') parts.push(`<a class="btn btn-soft btn-xs" href="/api/admin/agreements/${r.id}/pdf?download=1">${VG.icon.download.replace('<svg', '<svg width="13" height="13"')} PDF</a>`);
     parts.push(`<button class="btn btn-soft btn-xs" data-audit="${r.id}">Details</button>`);
@@ -178,7 +179,8 @@
     $$('[data-cs]', el).forEach((b) => b.addEventListener('click', () => countersign(Number(b.dataset.cs), () => render(el, ctx))));
     $$('[data-audit]', el).forEach((b) => b.addEventListener('click', () => audit(Number(b.dataset.audit))));
     $$('[data-void]', el).forEach((b) => b.addEventListener('click', async () => {
-      const reason = await VG.confirm('The member will be asked to sign a fresh copy. The voided copy stays in the records.', { title: 'Void this agreement?', ok: 'Void', danger: true, input: { label: 'Reason (shown to the member)', value: '' } });
+      const row = d.rows.find((x) => String(x.id) === b.dataset.void);
+      const reason = await VG.confirm(row && row.joint ? 'This is a shared copy: it is withdrawn for all its signatories. Send it again to start over. The voided copies stay in the records.' : 'The member will be asked to sign a fresh copy. The voided copy stays in the records.', { title: 'Void this agreement?', ok: 'Void', danger: true, input: { label: 'Reason (shown to the member)', value: '' } });
       if (reason === false) return;
       try { await VG.api(`/api/admin/agreements/${b.dataset.void}/void`, { body: { reason } }); VG.toast('Voided. A fresh copy is ready for the member.', 'ok'); render(el, ctx); }
       catch (e) { VG.toast(e.message, 'bad'); }
@@ -279,7 +281,7 @@
   function customList(list) {
     if (!list.length) return '<p class="muted small" style="margin:0">None yet.</p>';
     return `<div class="table-wrap"><table class="t"><thead><tr><th>Agreement</th><th>Blanks</th><th>Sent</th><th>Signed</th><th></th></tr></thead><tbody>
-      ${list.map((c) => `<tr><td><b>${VG.esc(c.title)}</b> ${c.required ? '<span class="chip warn" style="font-size:.68rem">Required</span>' : '<span class="chip" style="font-size:.68rem">Optional</span>'}
+      ${list.map((c) => `<tr><td><b>${VG.esc(c.title)}</b>
           <div class="muted small">${VG.esc(c.original_name || '')} · ${c.pages} page${c.pages === 1 ? '' : 's'} · ${VG.date(c.uploaded_at)}</div></td>
         <td class="small">${c.used_blanks} of ${c.blanks} in use</td><td class="num">${c.sent}</td><td class="num">${c.executed}</td>
         <td><div class="actions"><button class="btn btn-soft btn-xs" data-cfg="${c.id}">Set up blanks</button><button class="btn btn-amber btn-xs" data-csend="${c.id}">${VG.icon.send.replace('<svg', '<svg width="13" height="13"')} Send</button>
@@ -298,7 +300,7 @@
       $('#custom-err', el).textContent = '';
       if (!input.files.length) { $('#custom-err', el).textContent = 'Choose the PDF.'; return; }
       const fd = new FormData();
-      fd.append('title', form.title.value); fd.append('required', form.required.checked ? '1' : '0'); fd.append('file', input.files[0]);
+      fd.append('title', form.title.value); fd.append('file', input.files[0]);
       await VG.busy(form.querySelector('[type=submit]'), async () => {
         try {
           const t = await VG.api('/api/admin/agreements/custom', { method: 'POST', form: fd });
@@ -344,8 +346,7 @@
         <div class="cfg-doc" id="cfg-doc"><div class="viewer-loading"><div class="spinner"></div></div></div>
         <div class="cfg-side">
           ${t.standard ? `<p class="small cfg-std">${t.ready ? 'Changes apply to copies nobody has signed yet.' : 'Members can sign this document once you save the set-up. Until then it shows as “being updated”.'}</p>`
-            : `<label class="field"><span>Title</span><input class="input" id="cfg-title" value="${VG.esc(t.title)}" maxlength="120"></label>
-          <label class="check" style="margin-bottom:12px"><input type="checkbox" id="cfg-req" ${t.required ? 'checked' : ''}> Required for permanent membership</label>`}
+            : `<label class="field"><span>Title</span><input class="input" id="cfg-title" value="${VG.esc(t.title)}" maxlength="120"></label>`}
           <p class="muted small" id="cfg-intro">${t.blanks_list.length ? `${t.blanks_list.length} blank${t.blanks_list.length === 1 ? ' was' : 's were'} found. Each numbered box on the document is one: say what it is for. Anything set to “Leave blank” stays empty.`
             : 'No blanks were found automatically (the PDF may be a scan, or its blanks are plain spaces).'} Missing one? Use <b>Add a blank</b>, then click the document where it goes.</p>
           <div class="btn-row" style="margin-bottom:10px"><button type="button" class="btn btn-soft btn-sm" id="cfg-add">${VG.icon.plus} Add a blank</button>
@@ -437,7 +438,7 @@
     });
 
     const save = async (thenSend) => {
-      const body = { title: t.standard ? t.title : $('#cfg-title', dlg).value, required: t.standard ? true : $('#cfg-req', dlg).checked,
+      const body = { title: t.standard ? t.title : $('#cfg-title', dlg).value,
         blanks: $$('.cfg-row', dlg).map((row) => {
           const b = byId(row.dataset.id) || {};
           const out = { id: Number(row.dataset.id), mode: row.querySelector('[data-mode]').value, label: row.querySelector('[data-label]').value, value: row.querySelector('[data-value]').value };
@@ -463,28 +464,43 @@
     dlg.className = 'dlg';
     dlg.style.width = 'min(620px, calc(100vw - 32px))';
     const eligible = members.filter((m) => !['rejected', 'revoked', 'invited'].includes(m.state));
+    const isDirector = (m) => m.role === 'viewer' && /^director/i.test(m.designation || '');
+    const canJoint = t.kind === 'custom' || t.standard === false || (t.blanks !== undefined && !t.standard);
     dlg.innerHTML = `<div class="dlg-body">
       <div class="card-head"><div><p class="label" style="margin:0">Send for signature</p><h3 style="margin:0">${VG.esc(t.title)}</h3></div>
         <button class="viewer-close" type="button" data-x>${VG.icon.x}<span>Close</span></button></div>
+      ${canJoint ? `<p class="label" style="margin:4px 0 6px">How is it signed?</p>
+      <div class="seg" id="mode" style="margin-bottom:12px"><button type="button" aria-pressed="true" data-value="each">Each person signs their own copy</button><button type="button" aria-pressed="false" data-value="joint">Everyone signs one shared copy</button></div>
+      <p class="muted small" id="mode-hint" style="margin:-4px 0 12px">Each person gets a copy of their own, which VINC countersigns separately.</p>` : ''}
+      <p class="label" style="margin:4px 0 6px">Who signs?</p>
       <div class="choice-row col" id="aud">
+        <button type="button" data-v="pick" aria-pressed="true"><b>Selected people</b></button>
+        <button type="button" data-v="directors" aria-pressed="false"><b>All directors</b> · ${eligible.filter(isDirector).length}</button>
+        <button type="button" data-v="viewers" aria-pressed="false"><b>All directors, company secretary and staff</b> · ${eligible.filter((m) => m.role === 'viewer').length}</button>
         <button type="button" data-v="advisors" aria-pressed="false"><b>All advisors</b> · ${eligible.filter((m) => m.role === 'advisor').length}</button>
         <button type="button" data-v="investors" aria-pressed="false"><b>All investors</b> <span class="muted small">incl. STEAM-IE shareholders</span> · ${eligible.filter((m) => m.role === 'investor').length}</button>
         <button type="button" data-v="steam_ie" aria-pressed="false"><b>Only STEAM-IE shareholders</b> · ${eligible.filter((m) => m.investor_type === 'steam_ie').length}</button>
-        <button type="button" data-v="all" aria-pressed="false"><b>Everyone</b> · ${eligible.length}</button>
-        <button type="button" data-v="pick" aria-pressed="true"><b>Selected members</b></button>
+        <button type="button" data-v="all" aria-pressed="false"><b>All members</b> <span class="muted small">advisors and investors</span> · ${eligible.filter((m) => m.role !== 'viewer').length}</button>
       </div>
       <div id="pick" style="margin-top:12px">
-        <input class="input" id="pick-q" placeholder="Search a name or VINC ID" style="min-height:38px;margin-bottom:8px">
-        <div class="pick-list">${eligible.map((m) => `<label class="check pick-row" data-q="${VG.esc(((m.name || '') + ' ' + m.uid).toLowerCase())}"><input type="checkbox" value="${m.id}"> <span><b>${VG.esc(m.name || '—')}</b> <span class="muted small mono">${VG.esc(m.uid)} · ${VG.esc(m.label || (m.role === 'investor' ? 'Investor' : 'Advisor'))}</span></span></label>`).join('') || '<p class="muted">No members yet.</p>'}</div>
+        <input class="input" id="pick-q" placeholder="Search a name, VINC ID or designation" style="min-height:38px;margin-bottom:8px">
+        <div class="pick-list">${eligible.map((m) => `<label class="check pick-row" data-q="${VG.esc(((m.name || '') + ' ' + m.uid + ' ' + (m.label || '')).toLowerCase())}"><input type="checkbox" value="${m.id}"> <span><b>${VG.esc(m.name || '—')}</b> <span class="muted small mono">${VG.esc(m.uid)} · ${VG.esc(m.label || (m.role === 'investor' ? 'Investor' : 'Advisor'))}</span></span></label>`).join('') || '<p class="muted">No members yet.</p>'}</div>
       </div>
-      <p class="muted small" style="margin:12px 0 0">Each person gets an email with a link to sign. Anyone who already has it waiting gets a reminder instead.</p>
+      <p class="muted small" style="margin:12px 0 0">Each person gets an email with a link to sign. Whatever you send must be signed.</p>
       <p class="form-error" id="send-err"></p>
       <button class="btn btn-amber" type="button" id="send-go" style="width:100%">${VG.icon.send} Send</button></div>`;
     document.body.appendChild(dlg);
     dlg.showModal();
     dlg.addEventListener('close', () => { dlg.remove(); after && after(); });
     $('[data-x]', dlg).addEventListener('click', () => dlg.close());
-    let audience = 'pick';
+    let audience = 'pick', mode = 'each';
+    const modeEl = $('#mode', dlg);
+    if (modeEl) VG.seg(modeEl, (v) => {
+      mode = v;
+      $('#mode-hint', dlg).textContent = v === 'joint'
+        ? 'One document for everyone chosen: each signs it, then VINC countersigns once. Blanks meant for one person are left empty; everyone signs on the signature page.'
+        : 'Each person gets a copy of their own, which VINC countersigns separately.';
+    });
     $$('#aud button', dlg).forEach((b) => b.addEventListener('click', () => {
       audience = b.dataset.v;
       $$('#aud button', dlg).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
@@ -492,14 +508,15 @@
     }));
     $('#pick-q', dlg).addEventListener('input', (e) => { const q = e.target.value.toLowerCase(); $$('.pick-row', dlg).forEach((r) => { r.hidden = q && !r.dataset.q.includes(q); }); });
     $('#send-go', dlg).addEventListener('click', () => VG.busy($('#send-go', dlg), async () => {
-      const body = { template_id: t.id };
+      const body = { template_id: t.id, joint: mode === 'joint' };
       if (audience === 'pick') {
         body.user_ids = $$('.pick-row input:checked', dlg).map((i) => Number(i.value));
-        if (!body.user_ids.length) { $('#send-err', dlg).textContent = 'Tick at least one member.'; return; }
+        if (!body.user_ids.length) { $('#send-err', dlg).textContent = 'Tick at least one person.'; return; }
+        if (body.joint && body.user_ids.length < 2) { $('#send-err', dlg).textContent = 'Tick at least two people to sign one shared copy.'; return; }
       } else body.audience = audience;
       try {
         const r = await VG.api('/api/admin/agreements/send', { body });
-        VG.toast(`Sent to ${r.sent}${r.reminded ? `, reminded ${r.reminded}` : ''}${r.skipped ? `, ${r.skipped} had already signed` : ''}.`, 'ok');
+        VG.toast(r.joint ? `Sent as one shared copy (${r.joint}) to ${r.sent} people.` : `Sent to ${r.sent}${r.reminded ? `, reminded ${r.reminded}` : ''}${r.skipped ? `, ${r.skipped} had already signed` : ''}.`, 'ok');
         dlg.close();
       } catch (e) { $('#send-err', dlg).textContent = e.message; }
     }));
