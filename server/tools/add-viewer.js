@@ -22,8 +22,10 @@ if (existing) {
   db.prepare('DELETE FROM sessions WHERE user_id = ?').run(existing.id);
   console.log(`Updated view-only account ${uid} with a new password.`);
 } else {
-  db.prepare("INSERT INTO users (uid, role, name, organisation, password_hash, status, access_type, approved_at, signup_at, created_at) VALUES (?, 'viewer', ?, ?, ?, 'active', 'permanent', ?, ?, ?)")
-    .run(uid, name, designation || 'Company Secretary', hash, now, now, now);
+  const org = designation || 'Company Secretary';
+  // Members' KYC documents: on for the Company Secretary, off for other designations (the admin can change it).
+  db.prepare("INSERT INTO users (uid, role, name, organisation, kyc_access, password_hash, status, access_type, approved_at, signup_at, created_at) VALUES (?, 'viewer', ?, ?, ?, ?, 'active', 'permanent', ?, ?, ?)")
+    .run(uid, name, org, /^company sec/i.test(org) ? 1 : 0, hash, now, now, now);
   console.log(`Created view-only account ${uid} for ${name}.`);
 }
 console.log(`\n  VINC ID:  ${uid}\n  Password: ${password}\n\nLog in at the portal's /login page. Share the password privately; it is not shown again.`);

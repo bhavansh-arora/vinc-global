@@ -984,7 +984,7 @@
     let list;
     try { list = await VG.api('/api/admin/viewers'); } catch (e) { box.innerHTML = VG.esc(e.message); return; }
     box.innerHTML = `<div class="card-head"><h3>Directors, company secretary and staff</h3><button class="btn btn-primary btn-sm" type="button" id="vw-new">${VG.icon.plus} Add a view-only login</button></div>
-      <p class="muted small" style="margin-top:-6px">View-only logins for directors, your company secretary, employees or an auditor. They see every document in the data room, every signed agreement and members’ KYC documents, view only and watermarked, and sign any agreement you send them from Agreements. Every document they open is recorded.</p>
+      <p class="muted small" style="margin-top:-6px">View-only logins for directors, your company secretary, employees or an auditor. They see every document in the data room and every signed agreement, view only and watermarked, and sign any agreement you send them from Agreements. Members’ KYC documents are shown only to logins with KYC switched on: the Company Secretary by default. Every document they open is recorded.</p>
       <form id="vw-form" class="vw-form" hidden>
         <div class="form-row">
           <label class="field"><span>Name</span><input class="input" name="name" required maxlength="120"></label>
@@ -995,22 +995,34 @@
           <label class="field"><span>VINC ID <span class="hint">leave empty to generate one</span></span><input class="input mono" name="uid" placeholder="e.g. VG-DIR-01" maxlength="40"></label>
           <label class="field"><span>Email <span class="hint">for agreements to sign</span></span><input class="input" type="email" name="email" maxlength="160"></label>
         </div>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" name="kyc_access" value="1" id="vw-kyc"> Can see members’ KYC documents</label>
         <p class="muted small">A strong password is generated and shown to you once. Share it privately; they can change it after logging in.</p>
         <p class="form-error" id="vw-err"></p>
         <div class="btn-row"><button class="btn btn-primary btn-sm" type="submit">Create login</button><button class="btn btn-soft btn-sm" type="button" id="vw-cancel">Cancel</button></div>
       </form>
       <div id="vw-secret"></div>
-      ${list.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Name</th><th>VINC ID</th><th>Status</th><th>Last login</th><th class="num">Opened</th><th></th></tr></thead><tbody>
+      ${list.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Name</th><th>VINC ID</th><th>Status</th><th>KYC</th><th>Last login</th><th class="num">Opened</th><th></th></tr></thead><tbody>
         ${list.map((v) => `<tr><td><b>${VG.esc(v.name || '—')}</b><div class="muted small">${VG.esc(v.organisation || '')}${v.email ? ' · ' + VG.esc(v.email) : ''}</div></td>
           <td class="mono small">${VG.esc(v.uid)}</td>
           <td>${v.state === 'active' ? '<span class="chip ok"><span class="dot"></span>Active</span>' : '<span class="chip bad"><span class="dot"></span>Revoked</span>'}</td>
+          <td><label class="switch sm" title="Members’ KYC documents"><input type="checkbox" data-vw-kyc="${v.id}" ${v.kyc_access ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span class="sr-only">Can see members’ KYC documents</span></label></td>
           <td class="small">${v.last_login_at ? VG.ago(v.last_login_at) : '—'}</td>
           <td class="num">${v.views}</td>
           <td><div class="actions"><button class="btn btn-soft btn-xs" data-vw-log="${v.id}">Activity</button><button class="btn btn-soft btn-xs" data-vw-pwd="${v.id}">New password</button>
             ${v.state === 'active' ? `<button class="btn btn-danger btn-xs" data-vw-revoke="${v.id}">Revoke</button>` : `<button class="btn btn-soft btn-xs" data-vw-restore="${v.id}">Restore</button><button class="btn btn-danger btn-xs" data-vw-del="${v.id}">Delete</button>`}</div></td></tr>`).join('')}
       </tbody></table></div>` : '<p class="muted small" style="margin:0">No view-only logins yet.</p>'}`;
     const form = $('#vw-form', box);
+    // KYC starts on for the Company Secretary, off for other designations (it can be changed either way).
+    const syncKyc = () => { $('#vw-kyc', box).checked = /^company sec/i.test(form.organisation.value.trim()); };
+    form.organisation.addEventListener('input', syncKyc);
+    syncKyc();
     $('#vw-new', box).addEventListener('click', () => { form.hidden = false; form.name.focus(); });
+    $$('[data-vw-kyc]', box).forEach((cb) => cb.addEventListener('change', async () => {
+      try {
+        const v = await VG.api(`/api/admin/viewers/${cb.dataset.vwKyc}`, { method: 'PATCH', body: { kyc_access: cb.checked } });
+        VG.toast(v.kyc_access ? `${v.name} can now see members’ KYC documents.` : `${v.name} no longer sees KYC documents.`, 'ok');
+      } catch (e) { cb.checked = !cb.checked; fail(e); }
+    }));
     $('#vw-cancel', box).addEventListener('click', () => { form.hidden = true; form.reset(); });
     const showSecret = (v, title) => {
       $('#vw-secret', box).innerHTML = `<div class="id-card vw-secret"><p class="label">${VG.esc(title)}</p>
@@ -1028,7 +1040,7 @@
       $('#vw-err', box).textContent = '';
       await VG.busy(form.querySelector('[type=submit]'), async () => {
         try {
-          const v = await VG.api('/api/admin/viewers', { body: Object.fromEntries(new FormData(form)) });
+          const v = await VG.api('/api/admin/viewers', { body: { ...Object.fromEntries(new FormData(form)), kyc_access: $('#vw-kyc', box).checked } });
           await paintViewers();
           showSecret(v, `View-only login for ${v.name}`);
         } catch (ex) { $('#vw-err', box).textContent = ex.message; }
@@ -1053,7 +1065,7 @@
       let log;
       try { log = await VG.api(`/api/admin/viewers/${b.dataset.vwLog}/log`); } catch (e) { fail(e); return; }
       const v = list.find((x) => String(x.id) === b.dataset.vwLog);
-      const label = { login: 'Logged in', viewed_document: 'Viewed document', viewed_agreement: 'Viewed agreement', viewed_kyc: 'Viewed KYC', password_changed: 'Password changed', revoked: 'Access revoked', approved_permanent: 'Access restored', id_generated: 'Login created' };
+      const label = { login: 'Logged in', viewed_document: 'Viewed document', viewed_agreement: 'Viewed agreement', viewed_kyc: 'Viewed KYC', kyc_access_on: 'KYC access turned on', kyc_access_off: 'KYC access turned off', password_changed: 'Password changed', revoked: 'Access revoked', approved_permanent: 'Access restored', id_generated: 'Login created' };
       VG.confirm(log.length ? log.map((l) => `${VG.dateTime(l.at)} · ${label[l.action] || l.action}${l.detail ? ': ' + l.detail : ''}`).join('\n') : 'Nothing yet.', { title: `Activity: ${v ? v.name : ''}`, ok: 'Close' });
     }));
   }

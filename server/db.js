@@ -254,6 +254,11 @@ addColumn('news', 'file_size', 'file_size INTEGER');
 // Investors who join through the STEAM-IE share swap ('steam_ie'); NULL for everyone else.
 addColumn('users', 'investor_type', 'investor_type TEXT');
 
+// Which view-only accounts may see members' KYC documents: the Company Secretary by default, others when the
+// admin turns it on.
+addColumn('users', 'kyc_access', 'kyc_access INTEGER');
+db.exec("UPDATE users SET kyc_access = CASE WHEN lower(COALESCE(organisation, '')) LIKE 'company sec%' THEN 1 ELSE 0 END WHERE role = 'viewer' AND kyc_access IS NULL");
+
 // View-only accounts (e.g. the Company Secretary): older databases only allowed admin, advisor and investor.
 (function allowViewerRole() {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();

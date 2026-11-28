@@ -57,6 +57,10 @@ function accessState(u) {
 const isMember = (u) => !!u && (u.role === 'advisor' || u.role === 'investor');
 /** Anyone the admin can ask to sign: members and view-only accounts (directors, company secretary, staff). */
 const isSigner = (u) => isMember(u) || (!!u && u.role === 'viewer');
+/** View-only accounts allowed to see members' KYC documents. */
+const canSeeKyc = (u) => !!u && u.role === 'viewer' && u.kyc_access === 1;
+/** The default for a new view-only account: on for the Company Secretary, off for others. */
+const kycDefault = (designation) => (/^company sec/i.test(String(designation || '')) ? 1 : 0);
 /** How a signer is named on an agreement: Advisor, Investor, or their designation (e.g. Director). */
 const partyTitle = (u) => (!u ? 'Signatory' : u.role === 'investor' ? 'Investor' : u.role === 'advisor' ? 'Advisor' : (u.organisation || 'Signatory'));
 
@@ -78,6 +82,7 @@ function publicUser(u) {
     renewal_requested: !!u.renewal_requested, last_login_at: u.last_login_at, created_at: u.created_at,
     email_updates: u.email_updates === undefined ? true : !!u.email_updates,
     investor_type: u.investor_type || null,
+    ...(u.role === 'viewer' ? { kyc_access: u.kyc_access === 1, organisation: u.organisation } : {}),
     member_label: memberLabel(u),
     state: accessState(u),
   };
@@ -142,5 +147,5 @@ function tempHours() {
 
 module.exports = {
   createSession, destroySession, loadUser, accessState, publicUser,
-  isMember, isSigner, partyTitle, memberLabel, requireAuth, requireAdmin, requireMember, requireViewer, requireSigner, rateLimit, clearRateLimit, logAccess, tempHours,
+  isMember, isSigner, partyTitle, canSeeKyc, kycDefault, memberLabel, requireAuth, requireAdmin, requireMember, requireViewer, requireSigner, rateLimit, clearRateLimit, logAccess, tempHours,
 };

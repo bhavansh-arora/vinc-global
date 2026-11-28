@@ -18,7 +18,8 @@ r.get('/documents', (_req, res) => {
 });
 
 // Members' KYC documents, newest first, with who they belong to and where the review stands.
-r.get('/kyc', (_req, res) => {
+r.get('/kyc', (req, res) => {
+  if (!A.canSeeKyc(req.user)) return res.status(403).json({ error: 'KYC documents are not part of your access.' });
   res.json(db.prepare(`SELECT k.id, k.doc_type, k.original_name, k.mime, k.size, k.status, k.remark, k.uploaded_at, k.reviewed_at,
                               u.name AS member_name, u.uid AS member_uid, u.role AS member_role, u.investor_type AS member_type
                        FROM kyc_docs k JOIN users u ON u.id = k.user_id

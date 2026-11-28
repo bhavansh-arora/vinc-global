@@ -33,8 +33,9 @@
     $('#app').hidden = false;
     $('#menu-toggle').onclick = () => $('#app').classList.add('nav-open');
     $('#side-scrim').onclick = () => $('#app').classList.remove('nav-open');
-    [docs, signed, kyc] = await Promise.all([VG.api('/api/cs/documents').catch(() => []), VG.api('/api/cs/agreements').catch(() => []), VG.api('/api/cs/kyc').catch(() => [])]);
-    $('[data-count=kyc]').textContent = kyc.length || '';
+    if (!me.kyc_access) { const tab = $('.side nav a[data-view=kyc]'); if (tab) tab.remove(); delete VIEWS.kyc; }
+    [docs, signed, kyc] = await Promise.all([VG.api('/api/cs/documents').catch(() => []), VG.api('/api/cs/agreements').catch(() => []), me.kyc_access ? VG.api('/api/cs/kyc').catch(() => []) : []]);
+    if ($('[data-count=kyc]')) $('[data-count=kyc]').textContent = kyc.length || '';
     $('[data-count=documents]').textContent = docs.length || '';
     $('[data-count=signed]').textContent = signed.length || '';
     countToSign();
@@ -160,7 +161,7 @@
           <tr><th>Name</th><td>${VG.esc(me.name || '—')}</td></tr>
           <tr><th>VINC ID</th><td class="mono">${VG.esc(me.uid)}</td></tr>
           <tr><th>Designation</th><td>${VG.esc(me.organisation || '—')}</td></tr>
-          <tr><th>Access</th><td>View only: documents, signed agreements and members’ KYC documents; you sign the agreements VINC sends you</td></tr></tbody></table></div>
+          <tr><th>Access</th><td>View only: documents, signed agreements${me.kyc_access ? ' and members’ KYC documents' : ''}; you sign the agreements VINC sends you</td></tr></tbody></table></div>
         <p class="muted small" style="margin:12px 0 0">You can read everything here but cannot change, download or send anything. Each document you open is recorded.</p></div>
       <form class="card" id="pwd-form"><h3>Change password</h3>
         <label class="field"><span>Current password</span><div class="pwd-wrap"><input class="input" type="password" name="current" autocomplete="current-password" required><button type="button"></button></div></label>

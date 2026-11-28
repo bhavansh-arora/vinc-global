@@ -218,7 +218,7 @@ function newPassword() {
   }
 }
 const viewerRow = (id) => { const u = userRow(Number(id)); return u && u.role === 'viewer' ? u : null; };
-const viewerOut = (u) => ({ id: u.id, uid: u.uid, name: u.name, email: u.email, organisation: u.organisation, status: u.status, state: A.accessState(u), created_at: u.created_at, last_login_at: u.last_login_at,
+const viewerOut = (u) => ({ id: u.id, uid: u.uid, name: u.name, email: u.email, organisation: u.organisation, kyc_access: u.kyc_access === 1, status: u.status, state: A.accessState(u), created_at: u.created_at, last_login_at: u.last_login_at,
   views: db.prepare("SELECT COUNT(*) AS n FROM access_log WHERE user_id = ? AND action IN ('viewed_document','viewed_agreement','viewed_kyc')").get(u.id).n });
 
 r.get('/viewers', (_req, res) => res.json(db.prepare("SELECT * FROM users WHERE role = 'viewer' ORDER BY created_at DESC").all().map(viewerOut)));
@@ -239,8 +239,10 @@ r.post('/viewers', (req, res) => {
   let password = req.body.password ? String(req.body.password) : '';
   if (password) { const p = passwordProblem(password); if (p) return res.status(400).json({ error: p }); } else password = newPassword();
   const now = Date.now();
-  const id = db.prepare("INSERT INTO users (uid, role, name, email, organisation, password_hash, status, access_type, approved_at, signup_at, created_at) VALUES (?, 'viewer', ?, ?, ?, ?, 'active', 'permanent', ?, ?, ?)")
-    .run(uid, name, str(req.body.email, 160) || null, str(req.body.organisation, 80) || 'Company Secretary', bcrypt.hashSync(password, 10), now, now, now).lastInsertRowid;
+  const designation = str(req.body.organisation, 80) || 'Company Secretary';
+  const kyc = req.body.kyc_access === undefined ? A.kycDefault(designation) : (req.body.kyc_access === true || req.body.kyc_access === '1' || req.body.kyc_access === 'on' ? 1 : 0);
+  const id = db.prepare("INSERT INTO users (uid, role, name, email, organisation, kyc_access, password_hash, status, access_type, approved_at, signup_at, created_at) VALUES (?, 'viewer', ?, ?, ?, ?, ?, 'active', 'permanent', ?, ?, ?)")
+    .run(uid, name, str(req.body.email, 160) || null, designation, kyc, bcrypt.hashSync(password, 10), now, now, now).lastInsertRowid;
   A.logAccess(id, 'id_generated', 'view-only account');
   // The password is shown to the admin once and never stored in readable form.
   res.json({ ...viewerOut(userRow(id)), password });
@@ -266,6 +268,17 @@ function setViewerAccess(req, res, revoke) {
   A.logAccess(u.id, revoke ? 'revoked' : 'approved_permanent', 'view-only account');
   res.json(viewerOut(userRow(u.id)));
 }
+
+// Turn members' KYC documents on or off for one view-only account.
+r.patch('/viewers/:id', (req, res) => {
+  const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });
+  const b = req.body || {};
+  if (b.kyc_access !== undefined) {
+    db.prepare('UPDATE users SET kyc_access = ? WHERE id = ?').run(b.kyc_access ? 1 : 0, u.id);
+    A.logAccess(u.id, b.kyc_access ? 'kyc_access_on' : 'kyc_access_off', 'set by admin');
+  }
+  res.json(viewerOut(userRow(u.id)));
+});
 
 r.get('/viewers/:id/log', (req, res) => {
   const u = viewerRow(req.params.id); if (!u) return res.status(404).json({ error: 'Not found.' });

@@ -142,7 +142,7 @@ test('the command-line tool creates a view-only login with a generated password'
   assert.throws(() => execFileSync(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'server', 'tools', 'add-viewer.js'), 'X', 'ADMIN'], { env: { ...process.env, DATA_DIR: DATA }, stdio: 'pipe' }));
 });
 
-test("view-only logins see members' KYC documents, view only and recorded", async () => {
+test("the company secretary sees members' KYC documents; other view-only logins only when switched on", async () => {
   const admin = client();
   await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
   const gen = await admin('POST', '/api/admin/users', { role: 'investor', name: 'Kiran Shah', email: 'kiran@example.com', password: 'abc12345', access: 'temporary' });
@@ -155,7 +155,23 @@ test("view-only logins see members' KYC documents, view only and recorded", asyn
   assert.equal(upl.status, 200, JSON.stringify(upl.body));
   const kycId = db.prepare('SELECT id FROM kyc_docs WHERE user_id = ?').get(gen.body.id).id;
 
-  const v = await admin('POST', '/api/admin/viewers', { name: 'Ravi Director', organisation: 'Director' });
+  // A director: no KYC by default
+  const dir = await admin('POST', '/api/admin/viewers', { name: 'Ravi Director', organisation: 'Director' });
+  assert.equal(dir.body.kyc_access, false);
+  const d = client();
+  const dl = await d('POST', '/api/auth/login', { uid: dir.body.uid, password: dir.body.password });
+  assert.equal(dl.body.user.kyc_access, false);
+  assert.equal((await d('GET', '/api/cs/kyc')).status, 403);
+  assert.equal((await d('GET', `/api/files/kyc/${kycId}/raw`)).status, 404);
+  // ...until the admin switches it on, and off again
+  assert.equal((await admin('PATCH', `/api/admin/viewers/${dir.body.id}`, { kyc_access: true })).body.kyc_access, true);
+  assert.equal((await d('GET', '/api/cs/kyc')).status, 200);
+  await admin('PATCH', `/api/admin/viewers/${dir.body.id}`, { kyc_access: false });
+  assert.equal((await d('GET', `/api/files/kyc/${kycId}/raw`)).status, 404);
+
+  // The company secretary: KYC on by default, for every member
+  const v = await admin('POST', '/api/admin/viewers', { name: 'Neha Secretary', organisation: 'Company Secretary' });
+  assert.equal(v.body.kyc_access, true);
   const cs = client();
   await cs('POST', '/api/auth/login', { uid: v.body.uid, password: v.body.password });
   const list = await cs('GET', '/api/cs/kyc');
@@ -169,6 +185,12 @@ test("view-only logins see members' KYC documents, view only and recorded", asyn
   assert.equal(file.status, 200);
   assert.equal(file.body.subarray(0, 5).toString(), '%PDF-');
   assert.ok((await admin('GET', `/api/admin/viewers/${v.body.id}/log`)).body.some((l) => l.action === 'viewed_kyc' && /PAN card of Kiran Shah/.test(l.detail)));
+  // The command-line tool follows the same rule
+  const { execFileSync } = require('node:child_process');
+  execFileSync(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'server', 'tools', 'add-viewer.js'), 'Tool Secretary', 'VG-CS-09', 'Company Secretary'], { env: { ...process.env, DATA_DIR: DATA } });
+  execFileSync(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'server', 'tools', 'add-viewer.js'), 'Tool Director', 'VG-DIR-09', 'Director'], { env: { ...process.env, DATA_DIR: DATA } });
+  assert.equal(db.prepare("SELECT kyc_access FROM users WHERE uid = 'VG-CS-09'").get().kyc_access, 1);
+  assert.equal(db.prepare("SELECT kyc_access FROM users WHERE uid = 'VG-DIR-09'").get().kyc_access, 0);
   // View only: no reviewing
   assert.equal((await cs('POST', `/api/admin/kyc/${kycId}/review`, { status: 'verified' })).status, 403);
   // Another member still cannot open it; a revoked view-only login cannot either
