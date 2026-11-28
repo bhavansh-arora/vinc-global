@@ -114,7 +114,12 @@ r.get('/doc/:id/link', async (req, res) => {
 
 r.get('/kyc/:id/raw', (req, res) => {
   const d = db.prepare('SELECT * FROM kyc_docs WHERE id = ?').get(req.params.id);
-  if (!d || (!isAdmin(req) && d.user_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+  // The admin, the member who uploaded it, and view-only accounts (directors, company secretary) for records.
+  if (!d || (!isAdmin(req) && !isActiveViewer(req) && d.user_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+  if (isActiveViewer(req)) {
+    const owner = db.prepare('SELECT name, uid FROM users WHERE id = ?').get(d.user_id) || {};
+    A.logAccess(req.user.id, 'viewed_kyc', `${d.doc_type} of ${owner.name || owner.uid}`);
+  }
   sendStored(res, d);
 });
 

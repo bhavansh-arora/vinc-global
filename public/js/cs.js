@@ -14,11 +14,13 @@
     documents: ['Documents', 'Everything published in the data room · view only'],
     agreements: ['To sign', 'Agreements VINC has asked you to sign'],
     signed: ['Signed agreements', 'Every agreement signed in the portal · view only'],
+    kyc: ['KYC documents', 'Members’ KYC documents · view only'],
     account: ['Account', 'Your login'],
   };
   const STATUS = { executed: ['Signed by both parties', 'ok'], member_signed: ['Signed by the member · awaiting VINC', 'warn'], others: ['Shared copy · waiting for other signers', 'teal'] };
   const statusOf = (a) => (a.status === 'member_signed' && a.joint && !a.joint.complete ? STATUS.others : STATUS[a.status]);
-  let me = null, docs = [], signed = [];
+  let me = null, docs = [], signed = [], kyc = [];
+  const KYC_STATUS = { verified: ['Verified', 'ok'], submitted: ['Waiting for review', 'warn'], rejected: ['Rejected', 'bad'] };
 
   document.addEventListener('DOMContentLoaded', async () => {
     try { me = (await VG.loadMe()).user; } catch { me = null; }
@@ -31,7 +33,8 @@
     $('#app').hidden = false;
     $('#menu-toggle').onclick = () => $('#app').classList.add('nav-open');
     $('#side-scrim').onclick = () => $('#app').classList.remove('nav-open');
-    [docs, signed] = await Promise.all([VG.api('/api/cs/documents').catch(() => []), VG.api('/api/cs/agreements').catch(() => [])]);
+    [docs, signed, kyc] = await Promise.all([VG.api('/api/cs/documents').catch(() => []), VG.api('/api/cs/agreements').catch(() => []), VG.api('/api/cs/kyc').catch(() => [])]);
+    $('[data-count=kyc]').textContent = kyc.length || '';
     $('[data-count=documents]').textContent = docs.length || '';
     $('[data-count=signed]').textContent = signed.length || '';
     countToSign();
@@ -58,7 +61,7 @@
     document.title = `${VIEWS[view][0]} · VINC Global`;
     if (view === 'agreements') {
       VG.memberAgreements.render($('.view[data-view=agreements]'), sub, { onChanged: async () => { countToSign(); signed = await VG.api('/api/cs/agreements').catch(() => signed); $('[data-count=signed]').textContent = signed.length || ''; } });
-    } else ({ documents: renderDocs, signed: renderSigned, account: renderAccount })[view]();
+    } else ({ documents: renderDocs, signed: renderSigned, kyc: renderKyc, account: renderAccount })[view]();
     window.scrollTo({ top: 0 });
   }
   const empty = (icon, text) => `<div class="empty">${VG.icon[icon] || VG.icon.inbox}<p>${VG.esc(text)}</p></div>`;
@@ -118,6 +121,36 @@
     paint();
   }
 
+  // ---------------------------------------------------------------- KYC documents
+  function renderKyc() {
+    const el = $('.view[data-view=kyc]');
+    const people = new Set(kyc.map((k) => k.member_uid)).size;
+    el.innerHTML = `<div class="section-title"><div><h2>KYC documents</h2><p>Identity and bank documents uploaded by members${people ? ` (${people} ${people === 1 ? 'member' : 'members'})` : ''}, with where the VINC team's review stands. Each opens here, view only and watermarked with your ID, and every view is recorded.</p></div></div>
+      <div class="card">
+        <div class="card-head"><input class="input" id="kyc-q" type="search" placeholder="Search a name, VINC ID or document type" style="min-height:40px;max-width:360px">
+          <div class="filters"><button class="filter" aria-pressed="true" data-kf="">All <span class="muted">${kyc.length}</span></button><button class="filter" aria-pressed="false" data-kf="verified">Verified</button><button class="filter" aria-pressed="false" data-kf="submitted">Waiting for review</button><button class="filter" aria-pressed="false" data-kf="rejected">Rejected</button></div></div>
+        <div id="kyc-table"></div></div>`;
+    let f = '';
+    const paint = () => {
+      const q = $('#kyc-q').value.toLowerCase();
+      const rows = kyc.filter((k) => (!f || k.status === f) && (!q || `${k.member_name} ${k.member_uid} ${k.doc_type}`.toLowerCase().includes(q)));
+      $('#kyc-table').innerHTML = rows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Member</th><th>Document</th><th>Status</th><th>Uploaded</th><th></th></tr></thead><tbody>
+        ${rows.map((k) => `<tr><td><b>${VG.esc(k.member_name || '—')}</b><div class="muted small mono">${VG.esc(k.member_uid)} · ${VG.esc(k.member_label)}</div></td>
+          <td>${VG.esc(k.doc_type)}<div class="muted small">${VG.esc(k.original_name || '')}${k.size ? ' · ' + VG.size(k.size) : ''}</div></td>
+          <td><span class="chip ${(KYC_STATUS[k.status] || ['', ''])[1]}"><span class="dot"></span>${(KYC_STATUS[k.status] || [k.status])[0]}</span>${k.status === 'rejected' && k.remark ? `<div class="muted small">${VG.esc(k.remark)}</div>` : ''}</td>
+          <td class="small">${VG.date(k.uploaded_at)}</td>
+          <td><button class="btn btn-soft btn-xs" data-kyc="${k.id}">${VG.icon.eye.replace('<svg', '<svg width="14" height="14"')} View</button></td></tr>`).join('')}
+        </tbody></table></div>` : empty('id', kyc.length ? 'Nothing matches that search.' : 'No member has uploaded KYC documents yet.');
+      $$('[data-kyc]', el).forEach((b) => b.addEventListener('click', () => {
+        const k = kyc.find((x) => String(x.id) === b.dataset.kyc);
+        VG.openStored(`${k.doc_type} · ${k.member_name || k.member_uid}`, k.mime, `/api/files/kyc/${k.id}/raw`, `${k.member_uid} · ${(KYC_STATUS[k.status] || [k.status])[0]}`);
+      }));
+    };
+    $$('[data-kf]', el).forEach((b) => b.addEventListener('click', () => { f = b.dataset.kf; $$('[data-kf]', el).forEach((x) => x.setAttribute('aria-pressed', String(x === b))); paint(); }));
+    $('#kyc-q').addEventListener('input', paint);
+    paint();
+  }
+
   // ---------------------------------------------------------------- account
   function renderAccount() {
     const el = $('.view[data-view=account]');
@@ -127,7 +160,7 @@
           <tr><th>Name</th><td>${VG.esc(me.name || '—')}</td></tr>
           <tr><th>VINC ID</th><td class="mono">${VG.esc(me.uid)}</td></tr>
           <tr><th>Designation</th><td>${VG.esc(me.organisation || '—')}</td></tr>
-          <tr><th>Access</th><td>View only: documents and signed agreements; you sign the agreements VINC sends you</td></tr></tbody></table></div>
+          <tr><th>Access</th><td>View only: documents, signed agreements and members’ KYC documents; you sign the agreements VINC sends you</td></tr></tbody></table></div>
         <p class="muted small" style="margin:12px 0 0">You can read everything here but cannot change, download or send anything. Each document you open is recorded.</p></div>
       <form class="card" id="pwd-form"><h3>Change password</h3>
         <label class="field"><span>Current password</span><div class="pwd-wrap"><input class="input" type="password" name="current" autocomplete="current-password" required><button type="button"></button></div></label>

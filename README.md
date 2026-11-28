@@ -33,7 +33,7 @@ It uses the same look as [vinc-lab.com](https://vinc-lab.com) and [lms.vinc-lab.
 
 ## View-only access (directors, company secretary, staff)
 
-A view-only login sees two things, both view only and watermarked with their ID: **Documents** (everything published in the data room, including documents shared with one member) and **Signed agreements** (every agreement a member has signed, executed or awaiting VINC's countersignature). Nothing else: no member area, no admin area, no downloads. It is never counted, emailed or sent agreements as a member. Every document they open is recorded.
+A view-only login sees, view only and watermarked with their ID: **Documents** (everything published in the data room, including documents shared with one member), **Signed agreements** (every agreement a member has signed, executed or awaiting VINC's countersignature) and **KYC documents** (members' KYC files with their review status). Nothing else: no member area, no admin area, no downloads. It is never counted, emailed or sent agreements as a member. Every document they open is recorded.
 
 - **In the portal:** Admin → Settings → **Directors, company secretary and staff** → **Add a view-only login**, with a designation (Director, Company Secretary, Employee, Auditor or any other). IDs default to `VG-DIR-01`, `VG-CS-01`, `VG-EMP-01`…; a strong password is generated and shown once.
 - **Signing:** they can be sent any agreement from Agreements → Other agreements (pick them, or use **All directors** / **All directors, company secretary and staff**), and sign it under **To sign** on their page. The same card gives a new password, shows their activity, revokes or deletes the login.

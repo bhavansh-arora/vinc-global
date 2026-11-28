@@ -1,6 +1,6 @@
 'use strict';
 // View-only accounts (for example the Company Secretary): every document the admin published in the data room,
-// and every agreement anyone has signed. Nothing can be changed, downloaded or sent from here; each view is
+// every agreement anyone has signed, and members' KYC documents. Nothing can be changed, downloaded or sent from here; each view is
 // recorded in the access log.
 const fs = require('node:fs');
 const express = require('express');
@@ -15,6 +15,15 @@ r.get('/documents', (_req, res) => {
   res.json(db.prepare(`SELECT d.id, d.title, d.description, d.category, d.kind, d.original_name, d.size, d.url, d.created_at, d.link_frameable, d.link_reason,
                               u.name AS audience_name, u.uid AS audience_uid
                        FROM documents d LEFT JOIN users u ON u.id = d.audience_user_id ORDER BY d.created_at DESC`).all());
+});
+
+// Members' KYC documents, newest first, with who they belong to and where the review stands.
+r.get('/kyc', (_req, res) => {
+  res.json(db.prepare(`SELECT k.id, k.doc_type, k.original_name, k.mime, k.size, k.status, k.remark, k.uploaded_at, k.reviewed_at,
+                              u.name AS member_name, u.uid AS member_uid, u.role AS member_role, u.investor_type AS member_type
+                       FROM kyc_docs k JOIN users u ON u.id = k.user_id
+                       WHERE u.role IN ('advisor','investor') ORDER BY k.uploaded_at DESC`).all()
+    .map((k) => ({ ...k, member_label: A.memberLabel({ role: k.member_role, investor_type: k.member_type }) })));
 });
 
 // Signed means signed by the member (waiting for VINC) or by both parties (executed).

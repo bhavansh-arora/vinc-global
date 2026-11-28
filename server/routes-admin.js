@@ -219,7 +219,7 @@ function newPassword() {
 }
 const viewerRow = (id) => { const u = userRow(Number(id)); return u && u.role === 'viewer' ? u : null; };
 const viewerOut = (u) => ({ id: u.id, uid: u.uid, name: u.name, email: u.email, organisation: u.organisation, status: u.status, state: A.accessState(u), created_at: u.created_at, last_login_at: u.last_login_at,
-  views: db.prepare("SELECT COUNT(*) AS n FROM access_log WHERE user_id = ? AND action IN ('viewed_document','viewed_agreement')").get(u.id).n });
+  views: db.prepare("SELECT COUNT(*) AS n FROM access_log WHERE user_id = ? AND action IN ('viewed_document','viewed_agreement','viewed_kyc')").get(u.id).n });
 
 r.get('/viewers', (_req, res) => res.json(db.prepare("SELECT * FROM users WHERE role = 'viewer' ORDER BY created_at DESC").all().map(viewerOut)));
 

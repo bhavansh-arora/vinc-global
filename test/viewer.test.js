@@ -141,3 +141,42 @@ test('the command-line tool creates a view-only login with a generated password'
   // It will not touch a member's ID
   assert.throws(() => execFileSync(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'server', 'tools', 'add-viewer.js'), 'X', 'ADMIN'], { env: { ...process.env, DATA_DIR: DATA }, stdio: 'pipe' }));
 });
+
+test("view-only logins see members' KYC documents, view only and recorded", async () => {
+  const admin = client();
+  await admin('POST', '/api/auth/login', { uid: 'admin', password: 'Vinc@2026' });
+  const gen = await admin('POST', '/api/admin/users', { role: 'investor', name: 'Kiran Shah', email: 'kiran@example.com', password: 'abc12345', access: 'temporary' });
+  const inv = client();
+  await inv('POST', '/api/auth/login', { uid: gen.body.uid, password: 'abc12345' });
+  const fd = new FormData();
+  fd.append('doc_type', 'PAN card');
+  fd.append('file', new Blob([PDF], { type: 'application/pdf' }), 'pan.pdf');
+  const upl = await inv('POST', '/api/member/kyc', undefined, fd);
+  assert.equal(upl.status, 200, JSON.stringify(upl.body));
+  const kycId = db.prepare('SELECT id FROM kyc_docs WHERE user_id = ?').get(gen.body.id).id;
+
+  const v = await admin('POST', '/api/admin/viewers', { name: 'Ravi Director', organisation: 'Director' });
+  const cs = client();
+  await cs('POST', '/api/auth/login', { uid: v.body.uid, password: v.body.password });
+  const list = await cs('GET', '/api/cs/kyc');
+  assert.equal(list.status, 200);
+  const row = list.body.find((k) => k.id === kycId);
+  assert.equal(row.doc_type, 'PAN card');
+  assert.equal(row.member_name, 'Kiran Shah');
+  assert.equal(row.status, 'submitted');
+  assert.equal(row.stored_name, undefined, 'stored file names are not exposed');
+  const file = await cs('GET', `/api/files/kyc/${kycId}/raw`);
+  assert.equal(file.status, 200);
+  assert.equal(file.body.subarray(0, 5).toString(), '%PDF-');
+  assert.ok((await admin('GET', `/api/admin/viewers/${v.body.id}/log`)).body.some((l) => l.action === 'viewed_kyc' && /PAN card of Kiran Shah/.test(l.detail)));
+  // View only: no reviewing
+  assert.equal((await cs('POST', `/api/admin/kyc/${kycId}/review`, { status: 'verified' })).status, 403);
+  // Another member still cannot open it; a revoked view-only login cannot either
+  const other = client();
+  const g2 = await admin('POST', '/api/admin/users', { role: 'advisor', name: 'Other Member', password: 'abc12345', access: 'temporary' });
+  await other('POST', '/api/auth/login', { uid: g2.body.uid, password: 'abc12345' });
+  assert.equal((await other('GET', `/api/files/kyc/${kycId}/raw`)).status, 404);
+  assert.equal((await other('GET', '/api/cs/kyc')).status, 403);
+  await admin('POST', `/api/admin/viewers/${v.body.id}/revoke`);
+  assert.equal((await cs('GET', `/api/files/kyc/${kycId}/raw`)).status, 401);
+});

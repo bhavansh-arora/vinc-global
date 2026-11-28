@@ -28,7 +28,7 @@
     chats: ['Questions & answers', 'Answer “Ask the Founder” questions as the founder'],
     settings: ['Settings', 'Portal settings and your password'],
   };
-  const LOG_LABELS = { login: 'Logged in', signup: 'Signed up', approved_temporary: 'Temporary access approved', approved_permanent: 'Permanent access approved', renewal_requested: 'Asked for access again', kyc_uploaded: 'Uploaded KYC', kyc_verified: 'KYC verified', kyc_rejected: 'KYC rejected', kyc_submitted: 'KYC reopened', viewed_document: 'Viewed', viewed_agreement: 'Viewed agreement', downloaded_certificate: 'Downloaded certificate', investment_recorded: 'Investment recorded', certificate_issued: 'Certificate issued', password_changed: 'Password changed', id_generated: 'ID generated', rejected: 'Sign-up rejected', revoked: 'Access revoked', reset: 'ID reset' };
+  const LOG_LABELS = { login: 'Logged in', signup: 'Signed up', approved_temporary: 'Temporary access approved', approved_permanent: 'Permanent access approved', renewal_requested: 'Asked for access again', kyc_uploaded: 'Uploaded KYC', kyc_verified: 'KYC verified', kyc_rejected: 'KYC rejected', kyc_submitted: 'KYC reopened', viewed_document: 'Viewed', viewed_agreement: 'Viewed agreement', viewed_kyc: 'Viewed KYC', downloaded_certificate: 'Downloaded certificate', investment_recorded: 'Investment recorded', certificate_issued: 'Certificate issued', password_changed: 'Password changed', id_generated: 'ID generated', rejected: 'Sign-up rejected', revoked: 'Access revoked', reset: 'ID reset' };
 
   let users = [];
   let stats = null;
@@ -984,7 +984,7 @@
     let list;
     try { list = await VG.api('/api/admin/viewers'); } catch (e) { box.innerHTML = VG.esc(e.message); return; }
     box.innerHTML = `<div class="card-head"><h3>Directors, company secretary and staff</h3><button class="btn btn-primary btn-sm" type="button" id="vw-new">${VG.icon.plus} Add a view-only login</button></div>
-      <p class="muted small" style="margin-top:-6px">View-only logins for directors, your company secretary, employees or an auditor. They see every document in the data room and every signed agreement, view only and watermarked, and sign any agreement you send them from Agreements. Every document they open is recorded.</p>
+      <p class="muted small" style="margin-top:-6px">View-only logins for directors, your company secretary, employees or an auditor. They see every document in the data room, every signed agreement and members’ KYC documents, view only and watermarked, and sign any agreement you send them from Agreements. Every document they open is recorded.</p>
       <form id="vw-form" class="vw-form" hidden>
         <div class="form-row">
           <label class="field"><span>Name</span><input class="input" name="name" required maxlength="120"></label>
@@ -1053,7 +1053,7 @@
       let log;
       try { log = await VG.api(`/api/admin/viewers/${b.dataset.vwLog}/log`); } catch (e) { fail(e); return; }
       const v = list.find((x) => String(x.id) === b.dataset.vwLog);
-      const label = { login: 'Logged in', viewed_document: 'Viewed document', viewed_agreement: 'Viewed agreement', password_changed: 'Password changed', revoked: 'Access revoked', approved_permanent: 'Access restored', id_generated: 'Login created' };
+      const label = { login: 'Logged in', viewed_document: 'Viewed document', viewed_agreement: 'Viewed agreement', viewed_kyc: 'Viewed KYC', password_changed: 'Password changed', revoked: 'Access revoked', approved_permanent: 'Access restored', id_generated: 'Login created' };
       VG.confirm(log.length ? log.map((l) => `${VG.dateTime(l.at)} · ${label[l.action] || l.action}${l.detail ? ': ' + l.detail : ''}`).join('\n') : 'Nothing yet.', { title: `Activity: ${v ? v.name : ''}`, ok: 'Close' });
     }));
   }
